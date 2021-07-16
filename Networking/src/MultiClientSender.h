@@ -94,33 +94,33 @@ struct MultiClientSender
       heartbeatPtr->run();
   }
 
-  void SendAsync(const std::function<std::pair<void *, size_t>()> &serializer)
+  void SendAsync(void * msgPtr, size_t msgSize, shared_state::CompletionHandlerT && completionHandler = shared_state::CompletionHandlerT())
   {
     if (sharedState)
-      sharedState->sendAsync(serializer);
+      sharedState->sendAsync(msgPtr, msgSize, std::forward<shared_state::CompletionHandlerT>(completionHandler));
   }
 
-  // A DANGEROUS CONVENIENCE FUNCTION THAT WILL COPY YOUR ARGS AND ASSUME THAT THE POINTER AND SIZE
-  // PROVIDED ARE STILL VALID. for example, if you send(string.data(), string.length(), ast string), 
-  // the the original string will get copied and fall out of scope, and the pointer you gave will 
-  // be invalidated / not updated to point to the copy of the string
-  // works fine if what youre capturing is a shared pointer
-  template <class ... Args>
-  void SendAsync( void* msgPtr, size_t msgSize, Args&&... args)
-  {
-      sharedState->sendAsync(msgPtr, msgSize, std::forward<Args>(args)...);
-  }
+  // // A DANGEROUS CONVENIENCE FUNCTION THAT WILL COPY YOUR ARGS AND ASSUME THAT THE POINTER AND SIZE
+  // // PROVIDED ARE STILL VALID. for example, if you send(string.data(), string.length(), ast string), 
+  // // the the original string will get copied and fall out of scope, and the pointer you gave will 
+  // // be invalidated / not updated to point to the copy of the string
+  // // works fine if what youre capturing is a shared pointer
+  // template <class ... Args>
+  // void SendAsync( void* msgPtr, size_t msgSize, Args&&... args)
+  // {
+  //     sharedState->sendAsync(msgPtr, msgSize, std::forward<Args>(args)...);
+  // }
 
-  // A DANGEROUS CONVENIENCE FUNCTION THAT WILL COPY YOUR ARGS AND ASSUME THAT THE POINTER AND SIZE
-  // PROVIDED ARE STILL VALID. for example, if you send(string.data(), string.length(), ast string), 
-  // the the original string will get copied and fall out of scope, and the pointer you gave will 
-  // be invalidated / not updated to point to the copy of the string
-  // works fine if what youre capturing is a shared pointer
-  template <class ... Args>
-  void SendAsync(const boost::asio::ip::tcp::endpoint &endpoint, void* msgPtr, size_t msgSize, Args&&... args)
-  {
-      sharedState->sendAsync(endpoint, msgPtr, msgSize, std::forward<Args>(args)...);
-  }
+  // // A DANGEROUS CONVENIENCE FUNCTION THAT WILL COPY YOUR ARGS AND ASSUME THAT THE POINTER AND SIZE
+  // // PROVIDED ARE STILL VALID. for example, if you send(string.data(), string.length(), ast string), 
+  // // the the original string will get copied and fall out of scope, and the pointer you gave will 
+  // // be invalidated / not updated to point to the copy of the string
+  // // works fine if what youre capturing is a shared pointer
+  // template <class ... Args>
+  // void SendAsync(const boost::asio::ip::tcp::endpoint &endpoint, void* msgPtr, size_t msgSize, Args&&... args)
+  // {
+  //     sharedState->sendAsync(endpoint, msgPtr, msgSize, std::forward<Args>(args)...);
+  // }
 };
 
 #endif

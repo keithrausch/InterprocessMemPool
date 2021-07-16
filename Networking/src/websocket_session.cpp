@@ -23,6 +23,17 @@ websocket_session::websocket_session(
 
 websocket_session::~websocket_session()
 {
+  {
+    // std::lock_guard<std::mutex> guard(mutex_);
+    while (queue_.size() > 0)
+    {
+      auto & callback = std::get<2>(queue_.front());
+      if (callback)
+        callback(boost::asio::error::operation_aborted, 0);
+      queue_.pop();
+    }
+  }
+
   // Remove this session from the list of active sessions
   state_->leave(this);
 }
@@ -72,7 +83,7 @@ void websocket_session::on_read(beast::error_code ec, std::size_t bytes_transfer
       beast::bind_front_handler(&websocket_session::on_read, shared_from_this()));
 }
 
-void websocket_session::sendAsync(shared_state::SharedSerializedAndReturnedT serialized)
+void websocket_session::sendAsync(void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT &&completionHandler)
 {
   // Post our work to the strand, this ensures
   // that the members of `this` will not be
@@ -80,25 +91,48 @@ void websocket_session::sendAsync(shared_state::SharedSerializedAndReturnedT ser
 
   net::post(
       ws_.get_executor(),
-      beast::bind_front_handler(&websocket_session::on_send, shared_from_this(), serialized));
+      beast::bind_front_handler(&websocket_session::on_send, shared_from_this(), msgPtr, msgSize, std::forward<shared_state::CompletionHandlerT>(completionHandler), false));
 }
 
-void websocket_session::on_send(shared_state::SharedSerializedAndReturnedT serialized)
+void websocket_session::replaceSendAsync(void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT &&completionHandler)
 {
-  if (nullptr == serialized)
+  // Post our work to the strand, this ensures
+  // that the members of `this` will not be
+  // accessed concurrently.
+
+  net::post(
+      ws_.get_executor(),
+      beast::bind_front_handler(&websocket_session::on_send, shared_from_this(), msgPtr, msgSize, std::forward<shared_state::CompletionHandlerT>(completionHandler), true));
+}
+
+void websocket_session::on_send(void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT &&completionHandler, bool overwrite)
+{
+  // std::lock_guard<std::mutex> guard(mutex_);
+
+  if (overwrite && queue_.size() > 1)
+  {
+    auto & back = queue_.back();
+    auto & callback = std::get<2>(back);
+    if (callback)
+    {
+      callback(boost::asio::error::operation_aborted, 0);
+      callback = shared_state::CompletionHandlerT(); // not sure if this avoids move-sideeffects later
+    }
+      
+    std::get<0>(back) = msgPtr;
+    std::get<1>(back) = msgSize;
+    std::get<2>(back) = std::move(completionHandler);
+
     return;
+  }
 
   // Always add to queue
-  queue_.push(serialized);
+  queue_.emplace(msgPtr, msgSize, std::move(completionHandler));
+
 
   // Are we already writing?
   if (queue_.size() > 1)
     return;
-
-  // std::vector<double> numbersyo = {1.0, 2.7, 3.9};
-  auto next = queue_.front();
-  void *msgPtr = next->second.first;
-  size_t msgSize = next->second.second;
 
   // We are not currently writing, so send this immediately
   ws_.async_write(
@@ -106,21 +140,28 @@ void websocket_session::on_send(shared_state::SharedSerializedAndReturnedT seria
       beast::bind_front_handler(&websocket_session::on_write, shared_from_this()));
 }
 
-void websocket_session::on_write(beast::error_code ec, std::size_t)
+void websocket_session::on_write(beast::error_code ec, std::size_t writtenLength)
 {
-  // Handle the error, if any
-  if (ec)
-    return on_error(ec);
+  // std::lock_guard<std::mutex> guard(mutex_);
+
+  // call the user's completion handler
+  auto& handler = std::get<2>(queue_.front());
+  if (handler)
+    handler(ec, writtenLength);
 
   // Remove the string from the queue
   queue_.pop();
 
+  // Handle the error, if any
+  if (ec)
+    return on_error(ec);
+
   // Send the next message if any
   if (!queue_.empty())
   {
-    auto next = queue_.front();
-    void *msgPtr = next->second.first;
-    size_t msgSize = next->second.second;
+    auto &next = queue_.front();
+    void *msgPtr = std::get<0>(next);
+    size_t msgSize = std::get<1>(next);
 
     ws_.async_write(
         boost::asio::mutable_buffer(msgPtr, msgSize),

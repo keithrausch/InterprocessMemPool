@@ -102,7 +102,7 @@ void ProducerProcess()
     // just one of many ways to send data. 
     // the std::function method is the most generic, 
     // but this is a convenience function for most simple cases
-    sender.SendAsync((void*)(&*ptr), sizeof(*ptr), ptr); 
+    sender.SendAsync((void*)(&*ptr), sizeof(*ptr), [ptr](boost::beast::error_code, size_t){}); 
   }
 
   std::this_thread::sleep_for(std::chrono::duration<double>(1.0)); // give the sender some time to finish up

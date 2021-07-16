@@ -26,6 +26,7 @@ class websocket_session;
 class shared_state
 {
 
+
   // This mutex synchronizes all access to sessions_
   typedef std::recursive_mutex MutexT;
   MutexT mutex_;
@@ -50,60 +51,46 @@ public:
 
   Callbacks callbacks;
 
-  typedef std::pair<void *, size_t> SerializerReturnT;
-  typedef std::function<SerializerReturnT()> CallbackSendSerializerT;
-  typedef std::pair<CallbackSendSerializerT, SerializerReturnT> SerializedAndReturnedT;
-  typedef std::shared_ptr<SerializedAndReturnedT> SharedSerializedAndReturnedT;
+
+  typedef std::function<void(beast::error_code, size_t)> CompletionHandlerT;
+  typedef std::tuple<void*, size_t, CompletionHandlerT> SpanAndHandlerT;
+  
   // std::vector<shared_serialized_and_returned_T> queue_; // woah this is a vector, its even a vector in the beast example. weird.
 
   explicit shared_state(const Callbacks &callbacks_in);
 
   void join(websocket_session *session);
   void leave(websocket_session *session);
-  void sendAsync(const CallbackSendSerializerT &serializer);
-  void sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, const CallbackSendSerializerT &serializer);
+  void sendAsync(void * msgPtr, size_t msgSize, CompletionHandlerT &&completionHandler = CompletionHandlerT());
+  void sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, void * msgPtr, size_t msgSize, CompletionHandlerT &&completionHandler = CompletionHandlerT());
   void on_read(const boost::asio::ip::tcp::endpoint &endpoint, void *msgPtr, size_t msgSize);
   void on_error(const boost::asio::ip::tcp::endpoint &endpoint, beast::error_code ec);
 
 
   void sendAsync(const std::string &str);
   void sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, const std::string &str);
-  static CallbackSendSerializerT StringToCallback(const std::string &str);
+  
+  // // A DANGEROUS CONVENIENCE FUNCTION THAT WILL COPY YOUR ARGS AND ASSUME THAT THE POINTER AND SIZE
+  // // PROVIDED ARE STILL VALID. for example, if you send(string.data(), string.length(), ast string), 
+  // // the the original string will get copied and fall out of scope, and the pointer you gave will 
+  // // be invalidated / not updated to point to the copy of the string.
+  // // works fine if what youre capturing is a shared pointer
+  // template <class ... Args>
+  // void sendAsync( void* msgPtr, size_t msgSize, Args&&... args)
+  // {
+  //     sendAsync(ObjToCallback(msgPtr, msgSize, std::forward<Args>(args)...));
+  // }
 
-  template <class ... Args>
-  static CallbackSendSerializerT ObjToCallback(void* msgPtr, size_t msgSize, Args&&... args)
-  {
-    // scope capture BY COPY :
-    CallbackSendSerializerT serializer = [msgPtr, msgSize, args...]() -> std::pair<void *, size_t> {
-      return std::pair<void *, size_t>(msgPtr, msgSize);
-    };
-
-    return serializer;
-  }
-
-  SharedSerializedAndReturnedT RunAndPackage(const CallbackSendSerializerT &serializer);
-
-  // A DANGEROUS CONVENIENCE FUNCTION THAT WILL COPY YOUR ARGS AND ASSUME THAT THE POINTER AND SIZE
-  // PROVIDED ARE STILL VALID. for example, if you send(string.data(), string.length(), ast string), 
-  // the the original string will get copied and fall out of scope, and the pointer you gave will 
-  // be invalidated / not updated to point to the copy of the string.
-  // works fine if what youre capturing is a shared pointer
-  template <class ... Args>
-  void sendAsync( void* msgPtr, size_t msgSize, Args&&... args)
-  {
-      sendAsync(ObjToCallback(msgPtr, msgSize, std::forward<Args>(args)...));
-  }
-
-  // A DANGEROUS CONVENIENCE FUNCTION THAT WILL COPY YOUR ARGS AND ASSUME THAT THE POINTER AND SIZE
-  // PROVIDED ARE STILL VALID. for example, if you send(string.data(), string.length(), ast string), 
-  // the the original string will get copied and fall out of scope, and the pointer you gave will 
-  // be invalidated / not updated to point to the copy of the string
-  // works fine if what youre capturing is a shared pointer
-  template <class ... Args>
-  void sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, void* msgPtr, size_t msgSize, Args&&... args)
-  {
-      sendAsync(endpoint, ObjToCallback(msgPtr, msgSize, std::forward<Args>(args)...));
-  }
+  // // A DANGEROUS CONVENIENCE FUNCTION THAT WILL COPY YOUR ARGS AND ASSUME THAT THE POINTER AND SIZE
+  // // PROVIDED ARE STILL VALID. for example, if you send(string.data(), string.length(), ast string), 
+  // // the the original string will get copied and fall out of scope, and the pointer you gave will 
+  // // be invalidated / not updated to point to the copy of the string
+  // // works fine if what youre capturing is a shared pointer
+  // template <class ... Args>
+  // void sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, void* msgPtr, size_t msgSize, Args&&... args)
+  // {
+  //     sendAsync(endpoint, ObjToCallback(msgPtr, msgSize, std::forward<Args>(args)...));
+  // }
 
 };
 

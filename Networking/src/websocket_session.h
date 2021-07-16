@@ -19,6 +19,7 @@
 #include <memory>
 #include <string>
 #include <queue>
+#include <mutex>
 
 // Forward declaration
 class shared_state;
@@ -33,8 +34,8 @@ class websocket_session : public std::enable_shared_from_this<websocket_session>
     std::shared_ptr<shared_state> state_;
 
 
-    std::queue<shared_state::SharedSerializedAndReturnedT> queue_; // no mutex needed, only ever modified inside handlers, which are in a strang
-
+    std::queue<shared_state::SpanAndHandlerT> queue_; // no mutex needed, only ever modified inside handlers, which are in a strang
+    // std::mutex mutex_; // adding mutex so you can modify the pending send operations
 
     void on_error(beast::error_code ec);
     void on_accept(beast::error_code ec);
@@ -56,12 +57,12 @@ public:
     run();
 
     // Send a message
-    void
-    sendAsync(shared_state::SharedSerializedAndReturnedT serialized);
+    void sendAsync(void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT &&completionHandler = shared_state::CompletionHandlerT());
+    void replaceSendAsync(void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT &&completionHandler = shared_state::CompletionHandlerT());
 
 private:
     void
-    on_send(shared_state::SharedSerializedAndReturnedT serialized);
+    on_send(void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT &&completionHandler, bool overwrite);
 };
 
 

@@ -11,6 +11,7 @@
 #include "shared_state.h"
 #include "websocket_session.h"
 
+
 shared_state::
     shared_state(const Callbacks &callbacks_in)
     : callbacks(callbacks_in)
@@ -37,28 +38,12 @@ void shared_state::
     callbacks.callbackClose(session->endpoint);
 }
 
-shared_state::SharedSerializedAndReturnedT shared_state::RunAndPackage(const CallbackSendSerializerT &serializer)
-{
-  SerializedAndReturnedT packaged = SerializedAndReturnedT(serializer, SerializerReturnT()); // RIGHT HERE. we copied the lambda right here
-  auto const serializedPtr = std::make_shared<SerializedAndReturnedT>(std::move(packaged));
-
-  // do this AFTER call, else the data that the pointer points to may have been invalidated by the lambdas copy constructor
-  if (serializedPtr)
-    serializedPtr->second = serializedPtr->first();
-    
-  return serializedPtr;
-}
 
 // Broadcast a message to all websocket client sessions
 void shared_state::
-    sendAsync(const CallbackSendSerializerT &serializer)
+    sendAsync(void* msgPtr, size_t msgSize, CompletionHandlerT &&completionHandler)
 {
-  if (!serializer)
-    return;
-
-  // Put the message in a shared pointer so we can re-use it for each client
-  auto serializedPtr = RunAndPackage(serializer);
-  if (nullptr == serializedPtr || nullptr == serializedPtr->second.first || 0 == serializedPtr->second.second)
+  if (nullptr == msgPtr || 0 == msgSize)
     return;
 
   // Make a local list of all the weak pointers representing
@@ -76,19 +61,14 @@ void shared_state::
   // pointer. If successful, then send the message on that session.
   for (auto const &wp : v)
     if (auto sp = wp.lock())
-      sp->sendAsync(serializedPtr);
+      sp->sendAsync(msgPtr, msgSize, std::forward<CompletionHandlerT>(completionHandler));
 }
 
 // Broadcast a message to all websocket client sessions
 void shared_state::
-    sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, const CallbackSendSerializerT &serializer)
+    sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, void* msgPtr, size_t msgSize, CompletionHandlerT &&completionHandler)
 {
-  if (!serializer)
-    return;
-
-  // Put the message in a shared pointer so we can re-use it for each client
-  auto serializedPtr = RunAndPackage(serializer);
-  if (nullptr == serializedPtr || nullptr == serializedPtr->second.first || 0 == serializedPtr->second.second)
+  if (nullptr == msgPtr || 0 == msgSize)
     return;
 
   // Make a local list of all the weak pointers representing
@@ -108,31 +88,22 @@ void shared_state::
     if (auto sp = wp.lock())
     {
       if (sp->endpoint == endpoint)
-        sp->sendAsync(serializedPtr);
+        sp->sendAsync(msgPtr, msgSize, std::forward<CompletionHandlerT>(completionHandler));
     }
 }
 
-shared_state::CallbackSendSerializerT shared_state::StringToCallback(const std::string &str)
-{
-
-  // scope capture - BAM
-  CallbackSendSerializerT serializer = [str]() -> std::pair<void *, size_t> {
-    void *msgPtr = (void *)(str.data());
-    size_t msgSize = str.length();
-    return std::pair<void *, size_t>(msgPtr, msgSize);
-  };
-
-  return serializer;
-}
 
 void shared_state::sendAsync(const std::string &str)
 {
-    sendAsync(StringToCallback(str));
+    std::shared_ptr<std::string> strPtr = std::make_shared<std::string>(str);
+
+    sendAsync((void*)(strPtr->data()), strPtr->length(), [strPtr](beast::error_code, size_t){});
 }
 
 void shared_state::sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, const std::string &str)
 {
-    sendAsync(endpoint, StringToCallback(str));
+    std::shared_ptr<std::string> strPtr = std::make_shared<std::string>(str);
+    sendAsync(endpoint, (void*)(strPtr->data()), strPtr->length(), [strPtr](beast::error_code, size_t){});
 }
 
 void shared_state::on_read(const tcp::endpoint &endpoint, void *msgPtr, size_t msgSize)

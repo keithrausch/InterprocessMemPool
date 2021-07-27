@@ -19,6 +19,10 @@
 #include <functional>
 #include "beast.h"
 
+
+namespace IPC
+{
+
 // Forward declaration
 class websocket_session;
 
@@ -33,6 +37,7 @@ class shared_state
 
   // Keep a list of all the connected clients
   std::unordered_set<websocket_session *> sessions_;
+  std::vector<std::weak_ptr<websocket_session>> sessionPointerPool; // this is an attempt to find a slow-down in the code. consider removing
 
 public:
   struct Callbacks
@@ -93,5 +98,7 @@ public:
   // }
 
 };
+
+} // namespace
 
 #endif

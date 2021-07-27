@@ -12,6 +12,8 @@
 
 #include "MemPoolIPC.h"
 
+using namespace IPC; // dont crucify me
+
 struct MyClassIPC
 {
   short x;

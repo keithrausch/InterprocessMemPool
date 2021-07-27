@@ -39,6 +39,8 @@
 #include "MultiClientSender.h"
 #include "MultiClientReceiver.h"
 
+using namespace IPC; // dont crucify me
+
 struct MyClassIPC
 {
   short x;
@@ -123,7 +125,7 @@ void ConsumerProcess()
   // the type to route
   typedef MyClassIPC T;
   typedef MemPoolIPC<T> PoolT;
-  typedef RouterIPC<T, PoolT::sPtrT> RouterT;
+  typedef utils_ipc::RouterIPC<T, PoolT::sPtrT> RouterT;
 
   std::cout << "starting consumer process...\n";
   size_t poolSize = 50;
@@ -166,6 +168,7 @@ void ConsumerProcess()
 
   MultiClientReceiverArgs args;
   args.permitLoopback = true;
+  args.verbose = true;
   MultiClientReceiver receiver(guarded_context.GetIOContext(), receivableTopics, args, poolPtr->UniqueInstanceID());
   receiver.ListenForTopics();
 

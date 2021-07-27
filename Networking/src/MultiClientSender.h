@@ -7,6 +7,10 @@
 #include "listener.h"
 #include "shared_state.h"
 
+
+namespace IPC
+{
+
 struct MultiClientSenderArgs
 {
   std::string broadcastDestination = "255.255.255.255"; // send broadcast to all listeners
@@ -77,8 +81,10 @@ struct MultiClientSender
          << ",port:" << boundServerPort
          << ",id:" << uniqueInstanceID
          << ",endian:" << (uint16_t)1
-         << ",time:" << duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count()
+         << ",system_time:" << duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count()
          << ",";
+
+      
       return ss.str();
     };
 
@@ -122,5 +128,7 @@ struct MultiClientSender
   //     sharedState->sendAsync(endpoint, msgPtr, msgSize, std::forward<Args>(args)...);
   // }
 };
+
+} // namespace
 
 #endif

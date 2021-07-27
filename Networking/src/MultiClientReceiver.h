@@ -8,12 +8,17 @@
 #include <regex>
 #include <unordered_map>
 
+
+namespace IPC
+{
+
 struct MultiClientReceiverArgs
 {
   unsigned short broadcastRcvPort = 8081;
   size_t maxMessageLength = 500;
   double timeout_seconds = 3;
   bool permitLoopback = true;
+  bool verbose = false;
 };
 
 struct MultiClientReceiver
@@ -54,7 +59,7 @@ struct MultiClientReceiver
       endianness = (uint16_t)(matches.size() == 2) ? std::stoull(matches[1]) : 0;
 
       // time
-      std::regex_search(str, matches, std::regex(R"delim(time:(\d+),)delim"));
+      std::regex_search(str, matches, std::regex(R"delim(system_time:(\d+),)delim"));
       time = (int64_t)(matches.size() == 2) ? std::stoull(matches[1]) : 0;
 
       return hadError;
@@ -88,7 +93,8 @@ struct MultiClientReceiver
 
     std::string msg((char *)msgPtr, msgSize);
     std::string endpointString = EndpointToString(endpoint);
-    std::printf("RECEIVED BROADCAST FROM: %s\n%s\n", endpointString.c_str(), msg.c_str());
+    if (args.verbose)
+      std::printf("RECEIVED BROADCAST FROM: %s\n%s\n", endpointString.c_str(), msg.c_str());
 
     // search the broadcast for the server's claimed address and port
     std::string serverAddress;
@@ -102,7 +108,8 @@ struct MultiClientReceiver
     auto topic = characteristics.topic;
     // auto serverEndpoint = characteristics.claimedServerAddress;
     auto serverEndpoint = boost::asio::ip::tcp::endpoint(endpoint.address(), characteristics.port);
-    std::cout << "delta time between software send & receive (ms)" << time_ms - characteristics.time << std::endl;
+    if (args.verbose)
+      std::cout << "delta time between software send & receive (ms)" << time_ms - characteristics.time << std::endl;
 
     // bind the topic (if we have callbacks for it)
 
@@ -165,5 +172,7 @@ struct MultiClientReceiver
     udpReceiverPtr->run();
   }
 };
+
+} // namespace
 
 #endif

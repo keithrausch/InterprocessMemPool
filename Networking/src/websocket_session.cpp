@@ -11,6 +11,10 @@
 #include "websocket_session.h"
 #include <iostream>
 
+
+namespace IPC
+{
+
 websocket_session::websocket_session(
     tcp::socket &&socket,
     std::shared_ptr<shared_state> const &state, const tcp::endpoint &endpoint_in)
@@ -187,3 +191,5 @@ void websocket_session::run()
   // Accept the websocket handshake
   ws_.async_accept(beast::bind_front_handler(&websocket_session::on_accept, shared_from_this()));
 }
+
+} // namespace

@@ -11,6 +11,8 @@
 #include <iostream>
 #include <memory> // mutex, etc
 
+using namespace IPC; // dont crucify me
+
 struct MyClass
 {
   // just some random variables

@@ -22,6 +22,8 @@
 
 #include "MemPoolIPC.h"
 
+using namespace IPC; // dont crucify me
+
 struct MyClassIPC
 {
   short x;
@@ -29,6 +31,15 @@ struct MyClassIPC
   MyClassIPC() : x(0) { std::cout << "MyClassIPC()" << std::endl; }
   MyClassIPC(int x_in) : x(x_in) { std::cout << "MyClassIPC(" << x << ")\n"; }
   ~MyClassIPC() { std::cout << "~MyClassIPC(" << x << ")\n"; }
+};
+
+struct MyClassForTiming
+{
+  typedef std::chrono::_V2::steady_clock::time_point TimeT; 
+  TimeT time;
+  unsigned char some_large_object[1000]; // big object, why not. not copying it
+  MyClassForTiming() : time() { }
+  ~MyClassForTiming() { }
 };
 
 //
@@ -39,9 +50,9 @@ void ParentProcess()
   namespace ipc = boost::interprocess;
 
   // the type to route
-  typedef MyClassIPC T;
+  typedef MyClassForTiming T;
   typedef MemPoolIPC<T> PoolT;
-  typedef RouterIPC<T, PoolT::sPtrT> RouterT;
+  typedef utils_ipc::RouterIPC<T, PoolT::sPtrT> RouterT;
 
   std::cout << "starting parent process...\n";
 
@@ -65,13 +76,18 @@ void ParentProcess()
     std::this_thread::sleep_for(std::chrono::duration<double>(1.0));
   }
 
+  // send data
   for (size_t i = 0; i < poolSize * 2; ++i)
   {
     // make up some data
-    auto ptr = poolPtr->make_pooled(i);
+    auto elementPtr = poolPtr->make_pooled();
+    elementPtr->time = std::chrono::steady_clock::now();    
 
     // route it
-    routerPtr->Send(ptr, RouterT::ENQUEUE_MODE::WAIT_IF_FULL, 1);
+    routerPtr->Send(elementPtr, RouterT::ENQUEUE_MODE::WAIT_IF_FULL, 1);
+
+    std::this_thread::sleep_for(std::chrono::milliseconds(2)); 
+    // ^^^ not needed, just want to keep timing accurate
   }
 
   size_t nOutstanding;
@@ -94,9 +110,9 @@ void ChildProcess()
   namespace ipc = boost::interprocess;
 
   // the type to route
-  typedef MyClassIPC T;
+  typedef MyClassForTiming T;
   typedef MemPoolIPC<T> PoolT;
-  typedef RouterIPC<T, PoolT::sPtrT> RouterT;
+  typedef utils_ipc::RouterIPC<T, PoolT::sPtrT> RouterT;
 
   std::cout << "starting child process...\n";
 
@@ -120,9 +136,15 @@ void ChildProcess()
   bool timedout = false;
   while (*pipePtr && !timedout)
   {
-    RouterT::sPtrT ptr;
-    timedout = pipePtr->Receive(ptr, 5); // timed_wait just for dev purposes
-    std::cout << "got ptr... use_count = " << ptr.use_count() << std::endl;
+    RouterT::sPtrT elementPtr;
+    timedout = pipePtr->Receive(elementPtr, 5); // timed_wait just for dev purposes
+    if (timedout || ! elementPtr) continue;
+
+    using namespace std::chrono;
+    auto timeRcv = steady_clock::now();    
+    auto usec = duration_cast<microseconds>(timeRcv - elementPtr->time).count();
+    std::cout << "element took " << usec << " microseconds to send\n";
+    // std::cout << "got ptr... use_count = " << ptr.use_count() << std::endl;
   }
 
   std::cout << "ending child proces...\n";

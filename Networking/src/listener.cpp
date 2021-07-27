@@ -12,6 +12,10 @@
 #include "websocket_session.h"
 #include <iostream>
 
+
+namespace IPC
+{
+
 listener::
     listener(
         net::io_context &ioc,
@@ -98,3 +102,5 @@ void listener::
           &listener::on_accept,
           shared_from_this()));
 }
+
+} // namespace

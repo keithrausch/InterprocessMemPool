@@ -17,6 +17,10 @@
 #include <memory>
 #include <string>
 
+
+namespace IPC
+{
+
 // Forward declaration
 class shared_state;
 
@@ -41,5 +45,7 @@ public:
   // Start accepting incoming connections
   void run();
 };
+
+} // namespace
 
 #endif

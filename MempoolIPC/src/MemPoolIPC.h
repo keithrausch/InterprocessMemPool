@@ -34,6 +34,9 @@
 
 #include "UtilsIPC.h" // random number generator
 
+namespace IPC
+{
+
 // TODO remove this from global scope
 namespace ipc = boost::interprocess; // convenience
 
@@ -836,5 +839,7 @@ struct MemPoolGrower
     return ptr;
   }
 };
+
+} // namespace
 
 #endif

@@ -11,6 +11,9 @@
 #include <cstddef>    // std::max_align_t
 #include <functional> // std::function
 
+namespace IPC
+{
+
 //
 // A utility for getting raw memory of a certain number of bytes and alignment
 // this object owns the memory it allocates, so that memory will be freed when
@@ -40,9 +43,21 @@ class RawMemory
 
     // use the provided allocator to get the memory that will serve as our pool
     size_t nBytesTotal = sizeT*nElementsTotal + alignof(std::max_align_t);
-    raw = allocator.allocate(nBytesTotal);
+    try
+    {
+      raw = allocator.allocate(nBytesTotal); // std::allocator::allocate() MUST return a pointer to valid memory per the standard, else it throws
+    }
+    catch (const std::bad_alloc &e)
+    {
+      std::printf("RAWMEMORY - ATTEMPTED TO ALLOCATE %llu OF MEMORY, BUT THREW std::bad_alloc\n", (long long unsigned int)nBytesTotal);
+    }
+
     if (nullptr == raw)
-      throw std::bad_alloc();
+    {
+      // throw std::bad_alloc();
+      rawSize = 0;
+      return nullptr;
+    }
     else
       rawSize = nBytesTotal;
 
@@ -50,7 +65,10 @@ class RawMemory
     void* rawAligned_ = raw; // needs a type of void*&.. seems like bad function design to me, but what do i know
     rawAligned = (uint8_t*)std::align(alignT, nElementsTotal*sizeT, rawAligned_, rawSizeAfterAlignment);
     if (nullptr == rawAligned || rawSizeAfterAlignment < sizeT*nElementsTotal)
-      throw std::bad_alloc();
+    {
+      // throw std::bad_alloc();
+      return nullptr;
+    }
     
     return rawAligned;
   }
@@ -140,10 +158,18 @@ class AllocatorState
 
 
     // get the pointers into the raw pool
-    for (size_t i = 0; i < nElementsTotal; ++i)
-      ptrsAligned[i] = rawAligned + (sizeSharedT * i); // TODO CHECK ALIGNMENT
+    if (rawAligned && ptrsAligned)
+    {
+      for (size_t i = 0; i < nElementsTotal; ++i)
+        ptrsAligned[i] = rawAligned + (sizeSharedT * i); // TODO CHECK ALIGNMENT
+      initialized = true;
+    }
+    else
+    {
+      nAvailable = 0;
+      initialized = false;
+    }
     
-    initialized = true;
   }
 
   // hand out a pointer to the pool as if to allocate
@@ -158,8 +184,8 @@ class AllocatorState
     else
     {
       std::cout << "ALLOCATORSTATE - RAN OUT OF ELEMENTS TO LOAN. THE POOL IS TOO SMALL.\n";
-      //throw std::bad_alloc();
-      return nullptr;
+      throw std::bad_alloc(); // this MUST happen
+      // return nullptr;
     }
   }
 
@@ -283,7 +309,10 @@ public:
     : state(std::allocate_shared<StateT>(AllocatorT<StateT>(allocator), 1, allocator))
   {
     if (!state)
-      throw std::bad_alloc();      
+    {
+      // throw std::bad_alloc();    
+      std::printf("ALLOCATOR - SOMETHING WEIRD HAS HAPPENED. THE POOL STATE IS NULL\n");
+    }  
   }
 
   public:
@@ -294,7 +323,7 @@ public:
   : state(other.state)
   {
     if (nullptr == state)
-      std::printf("ALLOCATOR - SOMETHING WEIRD HAS HAPPENED. THE POOL NANE IS NULL\n");
+      std::printf("ALLOCATOR - SOMETHING WEIRD HAS HAPPENED. THE POOL STATE IS NULL\n");
     
     if (state->Initialized())
     {
@@ -316,7 +345,10 @@ public:
     : state(std::allocate_shared<StateT>(AllocatorT<StateT>(allocator), nElements, allocator))
   {
     if (!state)
-      throw std::bad_alloc();
+    {
+      std::printf("SharedPointerAllocator - SOMETHING WEIRD HAS HAPPENED. THE POOL STATE IS NULL\n");
+      // throw std::bad_alloc();
+    }
 
     // std::cout << "about to create a temporary object for control block size detection\n";
 
@@ -338,8 +370,14 @@ public:
     size_t alignSharedT;
     oneOffAllocator.state->GetSizeAndAlignment(sizeSharedT, alignSharedT);
     state->Allocate(sizeSharedT, alignSharedT);
-    
-    std::printf("Constructing Allocator<T> with sizeof(T)=%zu but an extra %zu bytes are needed for the shared_ptr's control block. Total size = %zu, total alignment = %zu\n", sizeof(T), sizeSharedT - sizeof(T), sizeSharedT, alignSharedT);
+
+    if (state->Initialized())
+      std::printf("Constructing Allocator<T> with sizeof(T)=%zu but an extra %zu bytes are needed for the shared_ptr's control block. Total size = %zu, total alignment = %zu\n", sizeof(T), sizeSharedT - sizeof(T), sizeSharedT, alignSharedT);
+    else
+    {
+      std::printf("SharedPointerAllocator - SOMETHING WEIRD HAS HAPPENED. THE POOL STATE COULD NOT INITIALIZE\n");
+      state = nullptr;
+    }
   }
 
   // rebind function. extremely important. and im not even gonna explain it :P
@@ -393,7 +431,19 @@ public:
   template <typename ...Args>
   std::shared_ptr<T> allocate_shared(Args&& ...args)
   {
-    return std::allocate_shared<T>(*this, std::forward<Args>(args)...);
+    if ( ! state )
+      return nullptr;
+
+    // this try-catch is required because std::allocate_shared does not check if it got a nullptr.
+    // per the standard, an allocator MUST return a pointer to valid memory or throw
+    try
+    {
+      return std::allocate_shared<T>(*this, std::forward<Args>(args)...);
+    }
+    catch (const std::bad_alloc &e)
+    {
+      return nullptr;
+    }
   }
 };
 
@@ -443,7 +493,10 @@ class SharedPointerArrayAllocator// : public SharedPointerAllocator<T*, Allocato
     count(count_in), rawAligned(nullptr)
   {
     if (nullptr == rawObjects)
-      throw std::bad_alloc();
+    {
+      // throw std::bad_alloc();
+      std::printf("SharedPointerArrayAllocator - SOMETHING WEIRD HAS HAPPENED. THE POOL STATE IS NULL\n");
+    }
 
     // allocate the T[] memory
     rawAligned = rawObjects->Allocate(sizeof(T), alignof(T));
@@ -476,12 +529,13 @@ class SharedPointerArrayAllocator// : public SharedPointerAllocator<T*, Allocato
   template <typename ...Args>
   std::shared_ptr<T*> allocate_raw(Args&& ...args )
   {
-    if (!rawObjects)
+    if (!rawObjects || ! sharedPointerAllocator.state)
       return nullptr; // could throw too
 
     T* tempPtr = nullptr;    
     auto ret = sharedPointerAllocator.allocate_shared(tempPtr); // constructed this way so that this shared_ptr owns an object instead of just being null
-
+    if (! ret)
+      return nullptr;
 
     size_t index = sharedPointerAllocator.state->GetElementNumber((uint8_t*)ret.get());
     //std::cout << "constructing at index: " << index << std::endl;
@@ -557,7 +611,10 @@ public:
     std::printf("PASSTHROUGH ALLOCATOR - allocated %zu elements of %zu bytes each for a total of %zu bytes\n", n, sizeof(T), n*sizeof(T));
     value_type* raw = allocator.allocate(n);
     if (nullptr == raw)
-      throw std::bad_alloc();
+    {
+      // throw std::bad_alloc();
+      std::printf("SharedPointerArrayAllocator - SOMETHING WEIRD HAS HAPPENED. COULD NOT ALLOCATE\n");
+    }
 
     return raw;
   }
@@ -583,6 +640,8 @@ bool operator!=(Passthrough_Allocator<T> const& x,
   return !(x == y);
 }
 
+
+} // namespace
 
 
 #endif

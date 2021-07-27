@@ -17,6 +17,9 @@
 #include <scoped_allocator>
 #include <boost/interprocess/smart_ptr/weak_ptr.hpp>
 
+namespace utils_ipc
+{
+
 namespace ipc = boost::interprocess; // convenience
 
 template <typename T, typename SharedPtr_T>
@@ -311,5 +314,7 @@ public:
     return count;
   }
 };
+
+} // namespace
 
 #endif

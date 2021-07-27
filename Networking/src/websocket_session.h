@@ -21,6 +21,10 @@
 #include <queue>
 #include <mutex>
 
+
+namespace IPC
+{
+
 // Forward declaration
 class shared_state;
 
@@ -64,6 +68,8 @@ private:
     void
     on_send(void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT &&completionHandler, bool overwrite);
 };
+
+} // namespace
 
 
 #endif

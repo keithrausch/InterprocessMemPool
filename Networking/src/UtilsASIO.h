@@ -100,7 +100,13 @@ namespace utils_asio
     {
       // Set a deadline for the read operation.
       timedout = false;
-      timeout.expires_after(std::chrono::milliseconds((size_t)(timeout_period_seconds * 1000))); // cancels the timer and resets it
+      if (timeout_period_seconds <= 0)
+        timeout.expires_at(boost::asio::steady_timer::time_point::max());
+      else
+      {
+        size_t timeout_period_ms = timeout_period_seconds * 1000 ;
+        timeout.expires_after(std::chrono::milliseconds(timeout_period_ms)); // cancels the timer and resets it
+      }
 
       socket.async_receive_from(boost::asio::buffer(recvBuffer),
                                 remoteEndpoint,
@@ -146,7 +152,8 @@ namespace utils_asio
     }
   };
 
-  void SendBroadcast(boost::asio::io_service &io_service, const std::string &msg, unsigned short portSender, const std::string &destination, unsigned short portReceiver)
+  /*
+  static void SendBroadcast(boost::asio::io_service &io_service, const std::string &msg, unsigned short portSender, const std::string &destination, unsigned short portReceiver)
   {
     namespace ba = boost::asio;
     namespace bs = boost::system;
@@ -161,6 +168,7 @@ namespace utils_asio
     auto handler = [](const boost::system::error_code &, std::size_t) {};
     sock.async_send_to(boost::asio::buffer(msg.c_str(), msg.length()), sender_endpoint, handler);
   }
+  */
 
   //
   // MUST USE THIS CLASS INSIDE A std::shared_ptr via std::make_shared
@@ -173,7 +181,7 @@ namespace utils_asio
 
     boost::asio::io_context &io_context;
     udp::socket socket;
-    udp::endpoint sender_endpoint;
+    udp::endpoint receiver_endpoint;
     boost::asio::steady_timer timer;
     float period_seconds;
 
@@ -186,7 +194,7 @@ namespace utils_asio
     Heartbeat(boost::asio::io_context &io_context_in, const MsgCreatorT &msgCreator_in, unsigned short portSender, const std::string &destination, unsigned short portReceiver, float period_seconds_in)
         : io_context(io_context_in),
           socket(io_context, udp::endpoint(udp::v4(), portSender)),
-          sender_endpoint(boost::asio::ip::address_v4::from_string(destination), portReceiver),
+          receiver_endpoint(boost::asio::ip::address_v4::from_string(destination), portReceiver),
           timer(io_context),
           period_seconds(period_seconds_in),
           msgCreator(msgCreator_in),
@@ -231,7 +239,7 @@ namespace utils_asio
         msg = msgCreator();
 
       socket.async_send_to(boost::asio::buffer(msg.c_str(), msg.length()),
-                           sender_endpoint,
+                           receiver_endpoint,
                            boost::beast::bind_front_handler(&Heartbeat::on_send, shared_from_this()));
       // when the socket is destroped, all pending ops are cancelled, os msg cant go out of scope before its used
     }
@@ -259,6 +267,11 @@ namespace utils_asio
     boost::asio::signal_set signals;
     std::mutex mutex;
 
+    typedef std::function<void(const boost::system::error_code &, int)> SignalCallbackT;
+    typedef std::function<void()> ShutdownCallbackT;
+    SignalCallbackT signalCallback;
+    ShutdownCallbackT shutdownCallback;
+
     void on_sigevent(const boost::system::error_code &error, int signal_number)
     {
       if (error)
@@ -274,6 +287,12 @@ namespace utils_asio
       // that would mean that the thread handling this handler would be trying to join itself
       // and that would deadlock.
       // https://stackoverflow.com/questions/64039374/c-terminate-called-after-throwing-an-instance-of-stdsystem-error-what-r
+
+      if (signalCallback)
+      {
+        signalCallback(error, signal_number);
+        signalCallback = 0; // good practice, i think
+      }
     }
 
   public:
@@ -286,6 +305,16 @@ namespace utils_asio
         : io_context(), work_guard(io_context.get_executor()), signals(io_context)
     {
       Run(nThreads);
+    }
+
+    void SetSignalCallback(const SignalCallbackT & signalCallback_in)
+    {
+      signalCallback = signalCallback_in;
+    }
+
+    void SetShutdownCallback(const ShutdownCallbackT & shutdownCallback_in)
+    {
+      shutdownCallback = shutdownCallback_in;
     }
 
     ~GuardedContext()
@@ -326,6 +355,12 @@ namespace utils_asio
     void Shutdown()
     {
       std::lock_guard<std::mutex> guard(mutex);
+
+      if (shutdownCallback)
+      {
+        shutdownCallback();
+        shutdownCallback = 0; // prevent it from being called twice
+      }
       
       signals.cancel(); // cancel the callbacks. this frees up the scope of the lambdas. do this before stopping the service
 

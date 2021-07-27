@@ -12,6 +12,10 @@
 #include "websocket_session.h"
 
 
+namespace IPC
+{
+
+
 shared_state::
     shared_state(const Callbacks &callbacks_in)
     : callbacks(callbacks_in)
@@ -49,19 +53,21 @@ void shared_state::
   // Make a local list of all the weak pointers representing
   // the sessions, so we can do the actual sending without
   // holding the mutex:
-  std::vector<std::weak_ptr<websocket_session>> v;
   {
     std::lock_guard<MutexT> lock(mutex_);
-    v.reserve(sessions_.size());
+    sessionPointerPool.clear();
+    sessionPointerPool.reserve(sessions_.size());
     for (auto p : sessions_)
-      v.emplace_back(p->weak_from_this());
+      sessionPointerPool.emplace_back(p->weak_from_this());
   }
 
   // For each session in our local list, try to acquire a strong
   // pointer. If successful, then send the message on that session.
-  for (auto const &wp : v)
+  for (auto const &wp : sessionPointerPool)
     if (auto sp = wp.lock())
       sp->sendAsync(msgPtr, msgSize, std::forward<CompletionHandlerT>(completionHandler));
+      
+  sessionPointerPool.clear();
 }
 
 // Broadcast a message to all websocket client sessions
@@ -74,22 +80,25 @@ void shared_state::
   // Make a local list of all the weak pointers representing
   // the sessions, so we can do the actual sending without
   // holding the mutex:
-  std::vector<std::weak_ptr<websocket_session>> v;
+
   {
     std::lock_guard<MutexT> lock(mutex_);
-    v.reserve(sessions_.size());
+    sessionPointerPool.clear();
+    sessionPointerPool.reserve(sessions_.size());
     for (auto p : sessions_)
-      v.emplace_back(p->weak_from_this());
+      sessionPointerPool.emplace_back(p->weak_from_this());
   }
 
   // For each session in our local list, try to acquire a strong
   // pointer. If successful, then send the message on that session.
-  for (auto const &wp : v)
+  for (auto const &wp : sessionPointerPool)
     if (auto sp = wp.lock())
     {
       if (sp->endpoint == endpoint)
         sp->sendAsync(msgPtr, msgSize, std::forward<CompletionHandlerT>(completionHandler));
     }
+
+  sessionPointerPool.clear();
 }
 
 
@@ -117,3 +126,5 @@ void shared_state::on_error(const tcp::endpoint &endpoint, beast::error_code ec)
   if (callbacks.callbackError)
     callbacks.callbackError(endpoint, ec);
 }
+
+} // namespace

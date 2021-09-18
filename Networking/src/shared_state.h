@@ -43,7 +43,7 @@ public:
   struct Callbacks
   {
     typedef boost::asio::ip::tcp::endpoint endpointT;
-    typedef std::function<void(const endpointT &endpoint, void *msgPtr, size_t msgSize)> CallbackReadT;
+    typedef std::function<void(const endpointT &endpoint, const void *msgPtr, size_t msgSize)> CallbackReadT;
     typedef std::function<void(const endpointT &endpoint)> CallbackSocketAcceptT;
     typedef std::function<void(const endpointT &endpoint)> CallbackSocketCloseT;
     typedef std::function<void(const endpointT &endpoint, const beast::error_code &ec)> CallbackErrorT;
@@ -58,7 +58,7 @@ public:
 
 
   typedef std::function<void(beast::error_code, size_t)> CompletionHandlerT;
-  typedef std::tuple<void*, size_t, CompletionHandlerT> SpanAndHandlerT;
+  typedef std::tuple<const void*, size_t, CompletionHandlerT> SpanAndHandlerT;
   
   // std::vector<shared_serialized_and_returned_T> queue_; // woah this is a vector, its even a vector in the beast example. weird.
 
@@ -66,37 +66,14 @@ public:
 
   void join(websocket_session *session);
   void leave(websocket_session *session);
-  void sendAsync(void * msgPtr, size_t msgSize, CompletionHandlerT &&completionHandler = CompletionHandlerT());
-  void sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, void * msgPtr, size_t msgSize, CompletionHandlerT &&completionHandler = CompletionHandlerT());
-  void on_read(const boost::asio::ip::tcp::endpoint &endpoint, void *msgPtr, size_t msgSize);
+  void sendAsync(const void * msgPtr, size_t msgSize, CompletionHandlerT &&completionHandler = CompletionHandlerT());
+  void sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, const void * msgPtr, size_t msgSize, CompletionHandlerT &&completionHandler = CompletionHandlerT());
+  void on_read(const boost::asio::ip::tcp::endpoint &endpoint, const void *msgPtr, size_t msgSize);
   void on_error(const boost::asio::ip::tcp::endpoint &endpoint, beast::error_code ec);
 
 
   void sendAsync(const std::string &str);
   void sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, const std::string &str);
-  
-  // // A DANGEROUS CONVENIENCE FUNCTION THAT WILL COPY YOUR ARGS AND ASSUME THAT THE POINTER AND SIZE
-  // // PROVIDED ARE STILL VALID. for example, if you send(string.data(), string.length(), ast string), 
-  // // the the original string will get copied and fall out of scope, and the pointer you gave will 
-  // // be invalidated / not updated to point to the copy of the string.
-  // // works fine if what youre capturing is a shared pointer
-  // template <class ... Args>
-  // void sendAsync( void* msgPtr, size_t msgSize, Args&&... args)
-  // {
-  //     sendAsync(ObjToCallback(msgPtr, msgSize, std::forward<Args>(args)...));
-  // }
-
-  // // A DANGEROUS CONVENIENCE FUNCTION THAT WILL COPY YOUR ARGS AND ASSUME THAT THE POINTER AND SIZE
-  // // PROVIDED ARE STILL VALID. for example, if you send(string.data(), string.length(), ast string), 
-  // // the the original string will get copied and fall out of scope, and the pointer you gave will 
-  // // be invalidated / not updated to point to the copy of the string
-  // // works fine if what youre capturing is a shared pointer
-  // template <class ... Args>
-  // void sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, void* msgPtr, size_t msgSize, Args&&... args)
-  // {
-  //     sendAsync(endpoint, ObjToCallback(msgPtr, msgSize, std::forward<Args>(args)...));
-  // }
-
 };
 
 } // namespace

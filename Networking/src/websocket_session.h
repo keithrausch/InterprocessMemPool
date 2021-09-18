@@ -61,12 +61,12 @@ public:
     run();
 
     // Send a message
-    void sendAsync(void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT &&completionHandler = shared_state::CompletionHandlerT());
-    void replaceSendAsync(void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT &&completionHandler = shared_state::CompletionHandlerT());
+    void sendAsync(const void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT &&completionHandler = shared_state::CompletionHandlerT());
+    void replaceSendAsync(const void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT &&completionHandler = shared_state::CompletionHandlerT());
 
 private:
     void
-    on_send(void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT &&completionHandler, bool overwrite);
+    on_send(const void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT &&completionHandler, bool overwrite);
 };
 
 } // namespace

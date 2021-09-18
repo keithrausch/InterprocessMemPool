@@ -47,7 +47,7 @@ struct MyClassIPC
   double i, j, k, l, m, n, o, p, q, r, s, t, u, v, w;
   MyClassIPC() : x(0) { std::cout << "MyClassIPC()" << std::endl; }
   MyClassIPC(int x_in) : x(x_in) { std::cout << "MyClassIPC(" << x << ")\n"; }
-  MyClassIPC(void *msgPtr, size_t msgSize)
+  MyClassIPC(const void *msgPtr, size_t msgSize)
   {
     if (msgSize != sizeof(MyClassIPC))
       return;
@@ -143,7 +143,7 @@ void ConsumerProcess()
   //
   MultiClientReceiver::TopicCallbacksT receivableTopics;
 
-  auto callbackRead = [poolPtr, routerPtr](const tcp::endpoint &endpoint, void *msgPtr, size_t msgSize) {
+  auto callbackRead = [poolPtr, routerPtr](const tcp::endpoint &endpoint, const void *msgPtr, size_t msgSize) {
     // std::string msg(static_cast<const char*>(msgPtr), msgSize);
 
     auto elementPtr = poolPtr->make_pooled(msgPtr, msgSize);
@@ -173,6 +173,7 @@ void ConsumerProcess()
   receiver.ListenForTopics();
 
   guarded_context.GetIOContext().run(); // block until the receiver timeout out
+  
 
   std::cout << "ending consumer proces...\n";
 }

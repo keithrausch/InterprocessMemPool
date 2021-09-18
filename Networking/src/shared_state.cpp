@@ -44,8 +44,7 @@ void shared_state::
 
 
 // Broadcast a message to all websocket client sessions
-void shared_state::
-    sendAsync(void* msgPtr, size_t msgSize, CompletionHandlerT &&completionHandler)
+void shared_state::sendAsync(const void* msgPtr, size_t msgSize, CompletionHandlerT &&completionHandler)
 {
   if (nullptr == msgPtr || 0 == msgSize)
     return;
@@ -71,8 +70,7 @@ void shared_state::
 }
 
 // Broadcast a message to all websocket client sessions
-void shared_state::
-    sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, void* msgPtr, size_t msgSize, CompletionHandlerT &&completionHandler)
+void shared_state::sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, const void* msgPtr, size_t msgSize, CompletionHandlerT &&completionHandler)
 {
   if (nullptr == msgPtr || 0 == msgSize)
     return;
@@ -115,7 +113,7 @@ void shared_state::sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, con
     sendAsync(endpoint, (void*)(strPtr->data()), strPtr->length(), [strPtr](beast::error_code, size_t){});
 }
 
-void shared_state::on_read(const tcp::endpoint &endpoint, void *msgPtr, size_t msgSize)
+void shared_state::on_read(const tcp::endpoint &endpoint, const void *msgPtr, size_t msgSize)
 {
   if (callbacks.callbackRead)
     callbacks.callbackRead(endpoint, msgPtr, msgSize);

@@ -71,6 +71,7 @@ struct MultiClientReceiver
   boost::asio::io_context &io_context;
   TopicCallbacksT topicCallbacks;
   std::unordered_map<std::string, std::weak_ptr<SessionClient>> clients; // TODO this assumes that we cant get the same topic from two different places
+  std::mutex clientsMutex;
   std::shared_ptr<utils_asio::UDPReceiver> udpReceiverPtr;
   MultiClientReceiverArgs args;
 
@@ -132,7 +133,10 @@ struct MultiClientReceiver
 
     // we have to not already have an active session
     std::shared_ptr<SessionClient> client;
+    
+    std::lock_guard<std::mutex> lock(clientsMutex); // leave this locked, we access clients again below
     client = clients[topic].lock();
+    
     if (client)
       return; // this session is still alive and kicking, leave it
 
@@ -170,6 +174,38 @@ struct MultiClientReceiver
                                                                args.timeout_seconds,
                                                                callbacks);
     udpReceiverPtr->run();
+  }
+
+  void SendAsync(const std::string &topic, void* msgPtr, size_t msgSize, SessionClient::CompletionHandlerT &&completionHandler = SessionClient::CompletionHandlerT(), bool overwrite = false)
+  {
+    std::lock_guard<std::mutex> lock(clientsMutex);
+    auto client = clients[topic].lock();
+    if (! client)
+    {
+      completionHandler(boost::asio::error::operation_aborted, 0);
+      return;
+    }
+
+    client->sendAsync(msgPtr, msgSize, std::move(completionHandler), overwrite);
+  }
+
+  void ReplaceSendAsync(const std::string &topic, void* msgPtr, size_t msgSize, SessionClient::CompletionHandlerT &&completionHandler = SessionClient::CompletionHandlerT())
+  {
+      SendAsync(topic, msgPtr, msgSize, std::forward<SessionClient::CompletionHandlerT>(completionHandler), true);
+  }
+
+  void SendAsync(const std::string &topic, const std::string &str, bool overwrite = false)
+  {
+    std::lock_guard<std::mutex> lock(clientsMutex);
+    auto client = clients[topic].lock();
+    if (! client)
+    {
+      return;
+    }
+
+    std::shared_ptr<std::string> strPtr = std::make_shared<std::string>(str);
+
+    client->sendAsync((*strPtr).data(), (*strPtr).length(), [strPtr](boost::beast::error_code, size_t){}, overwrite);
   }
 };
 

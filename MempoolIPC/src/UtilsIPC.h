@@ -394,7 +394,7 @@ namespace utils_ipc
     return hadError;
 #endif
 
-#ifdef linux
+#ifdef __linux__
     hadError = false;
     std::string fullPath = "/dev/shm/" + name_mapping;
     // race condition here, but this was a nuclear option anyways

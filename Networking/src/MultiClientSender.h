@@ -39,7 +39,7 @@ struct MultiClientSender
 
     shared_state::Callbacks callbacks;
 
-    callbacks.callbackRead = [](const tcp::endpoint &endpoint, void *msgPtr, size_t msgSize) {
+    callbacks.callbackRead = [](const tcp::endpoint &endpoint, const void *msgPtr, size_t msgSize) {
       std::stringstream ss;
       ss << endpoint;
       std::string endpointString = ss.str();

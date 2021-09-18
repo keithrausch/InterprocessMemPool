@@ -150,16 +150,18 @@ public:
       nstored.wait();
 
     if (!timedout)
-    { // lock_guard scope
-      ipc::scoped_lock<ipc::interprocess_mutex> guard(mutex);
-      //mutex.wait();
-      ptr = items[indexPop];
-      items[indexPop].reset();
-      indexPop = (indexPop + 1) % capacity;
-      --size;
-      //mutex.post();
+    {
+      { // lock_guard scope
+        ipc::scoped_lock<ipc::interprocess_mutex> guard(mutex);
+        //mutex.wait();
+        ptr = items[indexPop];
+        items[indexPop].reset();
+        indexPop = (indexPop + 1) % capacity;
+        --size;
+        //mutex.post();
+      }
+      nempty.post();
     }
-    nempty.post();
     return timedout;
   }
 
@@ -193,9 +195,10 @@ class RouterIPC
 
   typedef ipc::allocator<void, segment_manager_type> void_allocator_type;
   typedef ipc::deleter<PipeT, segment_manager_type> deleter_type;
+public:
   typedef ipc::shared_ptr<PipeT, void_allocator_type, deleter_type> sStrongPipeT;
   typedef ipc::weak_ptr<PipeT, void_allocator_type, deleter_type> sWeakPipeT;
-
+private:
   // ipc::allocator<SharedPtr_T, ipc::managed_shared_memory::segment_manager> allocator;
   typedef std::scoped_allocator_adaptor<ipc::allocator<sWeakPipeT, segment_manager_type>> ShmemAllocator;
   typedef ipc::vector<sWeakPipeT, ShmemAllocator> MyVector;

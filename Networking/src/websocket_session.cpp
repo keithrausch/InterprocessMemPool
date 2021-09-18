@@ -87,7 +87,7 @@ void websocket_session::on_read(beast::error_code ec, std::size_t bytes_transfer
       beast::bind_front_handler(&websocket_session::on_read, shared_from_this()));
 }
 
-void websocket_session::sendAsync(void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT &&completionHandler)
+void websocket_session::sendAsync(const void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT &&completionHandler)
 {
   // Post our work to the strand, this ensures
   // that the members of `this` will not be
@@ -98,7 +98,7 @@ void websocket_session::sendAsync(void* msgPtr, size_t msgSize, shared_state::Co
       beast::bind_front_handler(&websocket_session::on_send, shared_from_this(), msgPtr, msgSize, std::forward<shared_state::CompletionHandlerT>(completionHandler), false));
 }
 
-void websocket_session::replaceSendAsync(void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT &&completionHandler)
+void websocket_session::replaceSendAsync(const void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT &&completionHandler)
 {
   // Post our work to the strand, this ensures
   // that the members of `this` will not be
@@ -109,7 +109,7 @@ void websocket_session::replaceSendAsync(void* msgPtr, size_t msgSize, shared_st
       beast::bind_front_handler(&websocket_session::on_send, shared_from_this(), msgPtr, msgSize, std::forward<shared_state::CompletionHandlerT>(completionHandler), true));
 }
 
-void websocket_session::on_send(void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT &&completionHandler, bool overwrite)
+void websocket_session::on_send(const void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT &&completionHandler, bool overwrite)
 {
   // std::lock_guard<std::mutex> guard(mutex_);
 
@@ -140,7 +140,7 @@ void websocket_session::on_send(void* msgPtr, size_t msgSize, shared_state::Comp
 
   // We are not currently writing, so send this immediately
   ws_.async_write(
-      boost::asio::mutable_buffer(msgPtr, msgSize),
+      boost::asio::buffer(msgPtr, msgSize),
       beast::bind_front_handler(&websocket_session::on_write, shared_from_this()));
 }
 
@@ -164,11 +164,11 @@ void websocket_session::on_write(beast::error_code ec, std::size_t writtenLength
   if (!queue_.empty())
   {
     auto &next = queue_.front();
-    void *msgPtr = std::get<0>(next);
+    const void *msgPtr = std::get<0>(next);
     size_t msgSize = std::get<1>(next);
 
     ws_.async_write(
-        boost::asio::mutable_buffer(msgPtr, msgSize),
+        boost::asio::buffer(msgPtr, msgSize),
         beast::bind_front_handler(&websocket_session::on_write, shared_from_this()));
   }
 }

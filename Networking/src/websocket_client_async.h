@@ -16,6 +16,7 @@
 #include <iostream>
 #include <memory>
 #include <string>
+#include <queue>
 
 
 namespace IPC
@@ -30,24 +31,26 @@ using tcp = boost::asio::ip::tcp;       // from <boost/asio/ip/tcp.hpp>
 // Sends a WebSocket message and prints the response
 class SessionClient : public std::enable_shared_from_this<SessionClient>
 {
+public:
+  typedef std::function<void(beast::error_code, size_t)> CompletionHandlerT;
+
+private:
+
   tcp::resolver resolver_;
   websocket::stream<beast::tcp_stream> ws_;
   beast::flat_buffer buffer_;
   std::string serverAddress;
   unsigned short serverPort;
 
-  typedef std::pair<void *, size_t> SerializerReturnT;
-  typedef std::function<SerializerReturnT()> CallbackSendSerializerT;
-  typedef std::pair<CallbackSendSerializerT, SerializerReturnT> SerializedAndReturnedT;
-  typedef std::shared_ptr<SerializedAndReturnedT> SharedSerializedAndReturnedT;
+  typedef std::tuple<const void*, size_t, CompletionHandlerT> SpanAndHandlerT;
 
-  std::vector<SharedSerializedAndReturnedT> queue_; // woah this is a vector, its ever a vector in the beast example. weird.
+  std::queue<SpanAndHandlerT> queue_; // woah this is a vector, its ever a vector in the beast example. weird.
 
 public:
   struct Callbacks
   {
     typedef boost::asio::ip::tcp::endpoint endpointT;
-    typedef std::function<void(const endpointT &endpoint, void *msgPtr, size_t msgSize)> CallbackReadT;
+    typedef std::function<void(const endpointT &endpoint, const void *msgPtr, size_t msgSize)> CallbackReadT;
     typedef std::function<void(const endpointT &endpoint, const beast::error_code &ec)> CallbackSocketAcceptT;
     typedef std::function<void(const endpointT &endpoint, const beast::error_code &ec)> CallbackSocketCloseT;
     typedef std::function<void(const endpointT &endpoint, const beast::error_code &ec)> CallbackErrorT;
@@ -100,9 +103,7 @@ public:
   }
 
   void
-  on_resolve(
-      beast::error_code ec,
-      tcp::resolver::results_type results)
+  on_resolve(beast::error_code ec, tcp::resolver::results_type results)
   {
     if (ec)
       return on_error(ec);
@@ -171,17 +172,12 @@ public:
     // Send the message
     ws_.async_read(
         buffer_,
-        beast::bind_front_handler(
-            &SessionClient::on_read,
-            shared_from_this()));
+        beast::bind_front_handler(&SessionClient::on_read, shared_from_this()));
   }
 
   void
-  on_read(
-      beast::error_code ec,
-      std::size_t bytes_transferred)
+  on_read(beast::error_code ec, std::size_t bytes_transferred)
   {
-
     if (ec)
       return on_error(ec);
 
@@ -196,83 +192,83 @@ public:
     // Read another message
     ws_.async_read(
         buffer_,
-        beast::bind_front_handler(
-            &SessionClient::on_read,
-            shared_from_this()));
+        beast::bind_front_handler( &SessionClient::on_read, shared_from_this()));
   }
 
-  void sendAsync(const CallbackSendSerializerT &serializer)
+  void sendAsync(const void* msgPtr, size_t msgSize, CompletionHandlerT &&completionHandler, bool overwrite)
   {
-    SerializerReturnT msgDef = serializer();
-    if (nullptr == msgDef.first || 0 == msgDef.second)
-      return;
-
-    SerializedAndReturnedT packaged = SerializedAndReturnedT(serializer, msgDef);
-    auto const serializedPtr = std::make_shared<SerializedAndReturnedT>(packaged);
-
-    if (nullptr == serializedPtr)
-      return;
-
     // Post our work to the strand, this ensures
     // that the members of `this` will not be
     // accessed concurrently.
 
     net::post(
         ws_.get_executor(),
-        beast::bind_front_handler(
-            &SessionClient::on_send,
-            shared_from_this(),
-            serializedPtr));
+        beast::bind_front_handler(&SessionClient::on_send, shared_from_this(), msgPtr, msgSize, std::forward<CompletionHandlerT>(completionHandler), overwrite));
   }
 
-  void on_send(const SharedSerializedAndReturnedT &serialized)
+  void replaceSendAsync(const void* msgPtr, size_t msgSize, CompletionHandlerT &&completionHandler)
   {
-    // Always add to queue
-    queue_.push_back(serialized);
+    sendAsync(msgPtr, msgSize, std::move(completionHandler), true);
+  }
+
+
+  void on_send(const void* msgPtr, size_t msgSize, CompletionHandlerT &&completionHandler, bool overwrite)
+  {
+    if (overwrite && queue_.size() > 1)
+    {
+      // std::cout << "overwriting\n";
+      auto & back = queue_.back();
+      auto & callback = std::get<2>(back);
+      if (callback)
+      {
+        callback(boost::asio::error::operation_aborted, 0);
+        callback = CompletionHandlerT(); // not sure if this avoids move-sideeffects later
+      }
+        
+      std::get<0>(back) = msgPtr;
+      std::get<1>(back) = msgSize;
+      std::get<2>(back) = std::move(completionHandler);
+
+      return;
+    }
+    // std::cout << "NOT overwriting\n";
+
+    queue_.emplace(msgPtr, msgSize, std::move(completionHandler));
 
     // Are we already writing?
     if (queue_.size() > 1)
       return;
 
-    // std::vector<double> numbersyo = {1.0, 2.7, 3.9};
-    // call the serializer to get the message ptr and size
-    auto next = queue_.front();
-    void *msgPtr = next->second.first;
-    size_t msgSize = next->second.second;
-
-    // TODO what if the size is 0, do we still want to 'send' it?
-
     // We are not currently writing, so send this immediately
     ws_.async_write(
-        boost::asio::mutable_buffer(msgPtr, msgSize),
-        // net::buffer((void*)numbersyo.data(), numbersyo.size()*sizeof(double)),
-        beast::bind_front_handler(
-            &SessionClient::on_write,
-            shared_from_this()));
+        boost::asio::buffer(msgPtr, msgSize),
+        beast::bind_front_handler(&SessionClient::on_write, shared_from_this()));
   }
 
-  void on_write(beast::error_code ec, std::size_t)
+  void on_write(beast::error_code ec, std::size_t writtenLength)
   {
+    // call the user's completion handler
+    auto& handler = std::get<2>(queue_.front());
+    if (handler)
+      handler(ec, writtenLength);
+
+    // Remove the string from the queue
+    queue_.pop();
+
     // Handle the error, if any
     if (ec)
       return on_error(ec);
 
-    // Remove the string from the queue
-    queue_.erase(queue_.begin());
-
     // Send the next message if any
     if (!queue_.empty())
     {
-      // call the serializer to get the message ptr and size
-      auto next = queue_.front();
-      void *msgPtr = next->second.first;
-      size_t msgSize = next->second.second;
+      auto &next = queue_.front();
+      const void *msgPtr = std::get<0>(next);
+      size_t msgSize = std::get<1>(next);
 
       ws_.async_write(
-          boost::asio::mutable_buffer(msgPtr, msgSize),
-          beast::bind_front_handler(
-              &SessionClient::on_write,
-              shared_from_this()));
+          boost::asio::buffer(msgPtr, msgSize),
+          beast::bind_front_handler(&SessionClient::on_write, shared_from_this()));
     }
   }
 };

@@ -1,39 +1,53 @@
 
-set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD 17) # using std::filesystem, all else is c++11
+
+set(LIB_NAME lib_beastNetworking)
+
 
 # all headers
-set(HEADERS_NETWORKING
+set(HEADERS_${LIB_NAME}
 
     # top level classes
-    MultiClientSender.h
-    MultiClientReceiver.h
+    MultiClientSender.hpp
+    MultiClientReceiver.hpp
+    listener.hpp
 
     # general utils
     UtilsASIO.h
 
     # websocket utility files
-    net.h
-    beast.h
-    listener.h
-    listener.cpp
-    shared_state.h
-    shared_state.cpp
-    websocket_session.h
-    websocket_session.cpp    
-    websocket_client_async.h
+    http_session.hpp
+    net.hpp
+    shared_state.hpp
+    websocket_session.hpp
     )
     
+    
 # all source files
-set(SRC_NETWORKING)
+set(SRC_${LIB_NAME}
+    http_session.cpp
+    listener.cpp
+    shared_state.cpp
+    websocket_session.cpp    
+    )
 
-# headers and source files together for convenience
-set(HEADERS_AND_SRC_NETWORKING_LIB
-    ${HEADERS_NETWORKING}
-    ${SRC_NETWORKING})
+#
+# SSL SUPPORT REQUIRES OPENSSL TO BE INSTALL:
+# sudo apt-get install libssl-dev
+#
+find_package(OpenSSL REQUIRED)
+
+# find_package(Boost 1.70 REQUIRED COMPONENTS system thread filesystem)
+include_directories(../boost/boost_1_76_0/boost)
   
 # set up the library we are building
-add_library(Lib_Networking ${HEADERS_AND_SRC_NETWORKING_LIB})
-set_target_properties(Lib_Networking PROPERTIES LINKER_LANGUAGE CXX)
+add_library(${LIB_NAME} ${HEADERS_${LIB_NAME}} ${SRC_${LIB_NAME}})
+set_target_properties(${LIB_NAME} PROPERTIES LINKER_LANGUAGE CXX)
 
-target_include_directories(Lib_Networking PUBLIC .)
+target_include_directories(${LIB_NAME} PUBLIC .)
+
+target_link_libraries(${LIB_NAME}
+    OpenSSL::SSL 
+    OpenSSL::Crypto
+)
 

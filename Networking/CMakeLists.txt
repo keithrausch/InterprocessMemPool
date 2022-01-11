@@ -1,11 +1,11 @@
 
-option(BUILD_LIB_NETWORKING "Build the networking library" ON)
-option(BUILD_LIB_NETWORKING_EXAMPLES "Build the networking library examples" ON)
+option(BUILD_LIB_BEASTNETWORKING "Build the networking library" ON)
+option(BUILD_LIB_BEASTNETWORKING_EXAMPLES "Build the networking library examples" ON)
 
-if (BUILD_LIB_NETWORKING)
+if (BUILD_LIB_BEASTNETWORKING)
     add_subdirectory(src)
 endif()
 
-if (BUILD_LIB_NETWORKING_EXAMPLES)
-    add_subdirectory(examples)
-endif()
+# if (BUILD_LIB_BEASTNETWORKING_EXAMPLES)
+#     add_subdirectory(examples)
+# endif()

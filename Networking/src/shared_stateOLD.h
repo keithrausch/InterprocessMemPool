@@ -8,8 +8,8 @@
 //
 // Modified by Keith Rausch
 
-#ifndef BOOST_BEAST_EXAMPLE_WEBSOCKET_CHAT_MULTI_SHARED_STATE_HPP
-#define BOOST_BEAST_EXAMPLE_WEBSOCKET_CHAT_MULTI_SHARED_STATE_HPP
+#ifndef IPC_SHARED_STATE_HPP
+#define IPC_SHARED_STATE_HPP
 
 #include <boost/smart_ptr.hpp>
 #include <memory>

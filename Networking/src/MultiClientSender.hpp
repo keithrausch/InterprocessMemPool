@@ -4,11 +4,13 @@
 #define MULTI_CLIENT_SENDER_H
 
 #include "UtilsASIO.h"
-#include "listener.h"
-#include "shared_state.h"
+// #include "listener.h"
+#include "shared_state.hpp"
+// #include "advanced_server_flex.hpp"
+#include "listener.hpp"
 
 
-namespace IPC
+namespace BeastNetworking
 {
 
 struct MultiClientSenderArgs
@@ -25,6 +27,7 @@ struct MultiClientSenderArgs
 struct MultiClientSender
 {
   boost::asio::io_context &ioc;
+  boost::asio::ssl::context &ssl_context;
   std::string topic;                         // topic name
   std::shared_ptr<shared_state> sharedState; // for sending data
   unsigned short boundServerPort;
@@ -33,8 +36,8 @@ struct MultiClientSender
   std::uint_fast64_t uniqueInstanceID;
 
   // establish server and get its bound addres and port
-  MultiClientSender(boost::asio::io_context &ioc_in, const std::string &topic_in, const MultiClientSenderArgs &args_in, std::uint_fast64_t uniqueInstanceID_in = 0)
-      : ioc(ioc_in), topic(topic_in), boundServerPort(0), args(args_in), uniqueInstanceID(uniqueInstanceID_in)
+  MultiClientSender(boost::asio::io_context &ioc_in, boost::asio::ssl::context &ssl_context_in, const std::string &topic_in, const MultiClientSenderArgs &args_in, std::uint_fast64_t uniqueInstanceID_in = 0)
+      : ioc(ioc_in), ssl_context(ssl_context_in), topic(topic_in), boundServerPort(0), args(args_in), uniqueInstanceID(uniqueInstanceID_in)
   {
 
     shared_state::Callbacks callbacks;
@@ -56,7 +59,7 @@ struct MultiClientSender
 
     // bind to any address, any port
     tcp::endpoint endpoint(net::ip::make_address(args.serverBindAddress), args.serverBindPort);
-    auto listenerPtr = std::make_shared<listener>(ioc, endpoint, sharedState);
+    auto listenerPtr = std::make_shared<listener>(ioc, ssl_context, endpoint, sharedState);
     if (listenerPtr)
     {
       listenerPtr->run();
@@ -100,7 +103,7 @@ struct MultiClientSender
       heartbeatPtr->run();
   }
 
-  void SendAsync(void * msgPtr, size_t msgSize, shared_state::CompletionHandlerT && completionHandler = shared_state::CompletionHandlerT())
+  void SendAsync(const void * msgPtr, size_t msgSize, shared_state::CompletionHandlerT && completionHandler = shared_state::CompletionHandlerT())
   {
     if (sharedState)
       sharedState->sendAsync(msgPtr, msgSize, std::forward<shared_state::CompletionHandlerT>(completionHandler));

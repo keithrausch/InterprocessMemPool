@@ -36,10 +36,11 @@
 
 #include "MemPoolIPC.h"
 #include "RouterIPC.h"
-#include "MultiClientSender.h"
-#include "MultiClientReceiver.h"
+#include "MultiClientSender.hpp"
+#include "MultiClientReceiver.hpp"
 
 using namespace IPC; // dont crucify me
+using namespace BeastNetworking
 
 struct MyClassIPC
 {

@@ -219,15 +219,21 @@ namespace utils_asio
     void on_wait(const boost::system::error_code &error)
     {
       if (error)
+      {
+        // std::cout << "ERROR on_wait\n";
         return;
+      }
 
       start_send();
     }
 
     void on_send(const boost::system::error_code &error, std::size_t) // secnd arg is number of bytes sent.
     {
-      if (error)
-        return;
+      // if (error)
+      // {
+      //   std::cout << "ERROR on_send\n";
+      //   return;
+      // }
 
       timer.expires_after(boost::asio::chrono::milliseconds((size_t)(period_seconds * 1000))); // cancels the timer and resets it
       timer.async_wait(boost::beast::bind_front_handler(&Heartbeat::on_wait, shared_from_this()));

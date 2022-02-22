@@ -12,10 +12,8 @@
 #define BEASTWEBSERVERFLEXIBLE_SHARED_STATE_HPP
 
 
-// #include <boost/beast/core.hpp>
-// #include <boost/beast/http.hpp>
-// #include <boost/beast/ssl.hpp>
 #include "net.hpp"
+#include "rate_limiter.hpp"
 
 
 // stuff for shared_state
@@ -24,7 +22,6 @@
 #include <string>
 #include <unordered_set>
 #include <functional>
-// #include "beast.h"
 #include <queue>
 
 
@@ -78,10 +75,12 @@ public:
   };
 
   Callbacks callbacks;
+  RateLimiting::RateEnforcer::Args rate_enforcer_args; // default
+  RateLimiting::sRateTracker rate_tracker;
 
-
-  typedef std::function<void(beast::error_code, size_t)> CompletionHandlerT;
-  typedef std::tuple<const void*, size_t, CompletionHandlerT> SpanAndHandlerT;
+  typedef boost::asio::ip::tcp::endpoint endpointT;
+  typedef std::function<void(beast::error_code, size_t, const endpointT &)> CompletionHandlerT;
+  typedef std::tuple<const void*, size_t, CompletionHandlerT, bool> SpanAndHandlerT;
 
   // std::vector<shared_serialized_and_returned_T> queue_; // woah this is a vector, its even a vector in the beast example. weird.
 
@@ -102,17 +101,14 @@ public:
   void leave(plain_websocket_session *session);
   void join(ssl_websocket_session *session);
   void leave(ssl_websocket_session *session);
-  void sendAsync(const void * msgPtr, size_t msgSize, CompletionHandlerT &&completionHandler = CompletionHandlerT(), bool overwrite = false);
-  void sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, const void * msgPtr, size_t msgSize, CompletionHandlerT &&completionHandler = CompletionHandlerT(), bool overwrite = false);
+  void sendAsync(const void * msgPtr, size_t msgSize, CompletionHandlerT &&completionHandler = CompletionHandlerT(), bool force_send=false, size_t max_queue_size=std::numeric_limits<size_t>::max());
+  void sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, const void * msgPtr, size_t msgSize, CompletionHandlerT &&completionHandler = CompletionHandlerT(), bool force_send=false, size_t max_queue_size=std::numeric_limits<size_t>::max());
   void on_read(const boost::asio::ip::tcp::endpoint &endpoint, const void * msgPtr, size_t msgSize);
   void on_error(const boost::asio::ip::tcp::endpoint &endpoint, beast::error_code ec);
 
 
-  void sendAsync(const std::string &str);
-  void sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, const std::string &str);
-
-  void replaceSendAsync(const void * msgPtr, size_t msgSize, CompletionHandlerT &&completionHandler = CompletionHandlerT());
-  void replaceSendAsync(const boost::asio::ip::tcp::endpoint &endpoint, const void * msgPtr, size_t msgSize, CompletionHandlerT &&completionHandler = CompletionHandlerT());
+  void sendAsync(const std::string &str, bool force_send=false, size_t max_queue_size=std::numeric_limits<size_t>::max());
+  void sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, const std::string &str, bool force_send=false, size_t max_queue_size=std::numeric_limits<size_t>::max());
 };
 
 } // namespace

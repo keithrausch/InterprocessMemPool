@@ -1,13 +1,11 @@
 // Modified by Keith Rausch
 
-#ifndef MULTI_CLIENT_RECEIVER_H
-#define MULTI_CLIENT_RECEIVER_H
+#ifndef BEASTWEBSERVERFLEXIBLE_MULTI_CLIENT_RECEIVER_HPP
+#define BEASTWEBSERVERFLEXIBLE_MULTI_CLIENT_RECEIVER_HPP
 
-#include "UtilsASIO.h"
-// #include "websocket_client_async.h"
+#include "UtilsASIO.hpp"
 #include <regex>
 #include <unordered_map>
-// #include "advanced_server_flex.hpp"
 #include "listener.hpp"
 #include "http_session.hpp"
 
@@ -15,18 +13,19 @@
 namespace BeastNetworking
 {
 
-struct MultiClientReceiverArgs
-{
-  unsigned short broadcastRcvPort = 8081;
-  size_t maxMessageLength = 500;
-  double timeout_seconds = 3;
-  bool permitLoopback = true;
-  bool verbose = false;
-  bool useSSL = true;
-};
-
 struct MultiClientReceiver
 {
+
+  struct Args
+  {
+    unsigned short broadcastRcvPort = 8081;
+    size_t maxMessageLength = 500;
+    double timeout_seconds = 3;
+    bool permitLoopback = true;
+    bool verbose = false;
+    bool useSSL = true;
+  };
+
   struct SenderCharacteristics
   {
     std::string topic;
@@ -79,7 +78,7 @@ struct MultiClientReceiver
   std::unordered_map<std::string, std::weak_ptr<ssl_websocket_session>> clientsSSL; // TODO this assumes that we cant get the same topic from two different places
   std::mutex clientsMutex;
   std::shared_ptr<utils_asio::UDPReceiver> udpReceiverPtr;
-  MultiClientReceiverArgs args;
+  Args args;
 
   std::uint_fast64_t uniqueInstanceID;
 
@@ -89,7 +88,7 @@ struct MultiClientReceiver
     return "__" + topic + "__" + EndpointToString(endpoint);
   }
 
-  MultiClientReceiver(boost::asio::io_context &io_context_in, boost::asio::ssl::context &ssl_context_in, const TopicStatesT &topicStates_in, const MultiClientReceiverArgs &args_in, std::uint_fast64_t uniqueInstanceID_in = 0)
+  MultiClientReceiver(boost::asio::io_context &io_context_in, boost::asio::ssl::context &ssl_context_in, const TopicStatesT &topicStates_in, const Args &args_in, std::uint_fast64_t uniqueInstanceID_in = 0)
       : io_context(io_context_in), ssl_context(ssl_context_in), topicStates(topicStates_in), args(args_in), uniqueInstanceID(uniqueInstanceID_in)
   {
   }
@@ -234,7 +233,7 @@ struct MultiClientReceiver
   }
 
   template <typename EndpointT>
-  void SendAsync(const std::string &topic, const EndpointT &endpoint, void* msgPtr, size_t msgSize, BeastNetworking::shared_state::CompletionHandlerT &&completionHandler = BeastNetworking::shared_state::CompletionHandlerT(), bool overwrite = false)
+  void SendAsync(const std::string &topic, const EndpointT &endpoint, void* msgPtr, size_t msgSize, BeastNetworking::shared_state::CompletionHandlerT &&completionHandler = BeastNetworking::shared_state::CompletionHandlerT(), bool force_send=false, size_t max_queue_size=std::numeric_limits<size_t>::max())
   {
     auto uniqueClientName = UniqueClientName(topic, endpoint);
     std::lock_guard<std::mutex> lock(clientsMutex);
@@ -245,7 +244,7 @@ struct MultiClientReceiver
       auto client = clients[uniqueClientName].lock();
       if (client)
       {
-        client->sendAsync(msgPtr, msgSize, std::move(completionHandler), overwrite);
+        client->sendAsync(msgPtr, msgSize, std::move(completionHandler), force_send, max_queue_size);
         found = true;
       }
     }
@@ -253,24 +252,19 @@ struct MultiClientReceiver
       auto client = clientsSSL[uniqueClientName].lock();
       if (client)
       {
-        client->sendAsync(msgPtr, msgSize, std::move(completionHandler), overwrite);
+        client->sendAsync(msgPtr, msgSize, std::move(completionHandler), force_send, max_queue_size);
         found = true;
       }
     }
     
     if ( ! found)
-      completionHandler(boost::asio::error::operation_aborted, 0);
+      completionHandler(boost::asio::error::operation_aborted, 0, endpoint);
       
   }
 
-  template <typename EndpointT>
-  void ReplaceSendAsync(const std::string &topic, const EndpointT &endpoint, void* msgPtr, size_t msgSize, BeastNetworking::shared_state::CompletionHandlerT &&completionHandler = BeastNetworking::shared_state::CompletionHandlerT())
-  {
-      SendAsync(topic, endpoint, msgPtr, msgSize, std::forward<BeastNetworking::shared_state::CompletionHandlerT>(completionHandler), true);
-  }
 
   template <typename EndpointT>
-  void SendAsync(const std::string &topic, const EndpointT &endpoint, const std::string &str, bool overwrite = false)
+  void SendAsync(const std::string &topic, const EndpointT &endpoint, const std::string &str, bool force_send=false, size_t max_queue_size=std::numeric_limits<size_t>::max())
   {
     std::shared_ptr<std::string> strPtr = std::make_shared<std::string>(str);
     auto uniqueClientName = UniqueClientName(topic, endpoint);
@@ -279,12 +273,12 @@ struct MultiClientReceiver
     {
       auto client = clients[uniqueClientName].lock();
       if (client)
-        client->sendAsync((*strPtr).data(), (*strPtr).length(), [strPtr](boost::beast::error_code, size_t){}, overwrite);
+        client->sendAsync((*strPtr).data(), (*strPtr).length(), [strPtr](boost::beast::error_code, size_t, const boost::asio::ip::tcp::endpoint &){}, force_send, max_queue_size);
     }
     {
       auto client = clientsSSL[uniqueClientName].lock();
       if (client)
-        client->sendAsync((*strPtr).data(), (*strPtr).length(), [strPtr](boost::beast::error_code, size_t){}, overwrite);
+        client->sendAsync((*strPtr).data(), (*strPtr).length(), [strPtr](boost::beast::error_code, size_t, const boost::asio::ip::tcp::endpoint &){}, force_send, max_queue_size);
     }
   }
 };

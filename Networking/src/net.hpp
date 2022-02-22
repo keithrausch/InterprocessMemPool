@@ -8,8 +8,8 @@
 //
 // Modified by Keith Rausch
 
-#ifndef BEASTWEBSERVER_ADVANCED_SERVER_NET_HPP
-#define BEASTWEBSERVER_ADVANCED_SERVER_NET_HPP
+#ifndef BEASTWEBSERVERFLEXIBLE_NET_HPP
+#define BEASTWEBSERVERFLEXIBLE_NET_HPP
 
 #include <boost/asio.hpp>
 #include <boost/beast/core.hpp>

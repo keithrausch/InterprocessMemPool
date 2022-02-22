@@ -1,42 +1,42 @@
 // Keith Rausch
 
-#ifndef MULTI_CLIENT_SENDER_H
-#define MULTI_CLIENT_SENDER_H
+#ifndef BEASTWEBSERVERFLEXIBLE_MULTI_CLIENT_SENDER_HPP
+#define BEASTWEBSERVERFLEXIBLE_MULTI_CLIENT_SENDER_HPP
 
-#include "UtilsASIO.h"
-// #include "listener.h"
+#include "UtilsASIO.hpp"
 #include "shared_state.hpp"
-// #include "advanced_server_flex.hpp"
 #include "listener.hpp"
 
 
 namespace BeastNetworking
 {
 
-struct MultiClientSenderArgs
-{
-  std::string broadcastDestination = "255.255.255.255"; // send broadcast to all listeners
-  unsigned short broadcastSendPort = 0;                 // send broadcast on any port
-  unsigned short broadcastReceiverPort = 8081;          // change me - broadcast receiver port
-  float heartbeatPeriod_seconds = 0.5;                  // seconds between heartbeats
-
-  std::string serverBindAddress = "0.0.0.0"; // bind server to any address
-  unsigned short serverBindPort = 0;         // bind server to any port
-};
 
 struct MultiClientSender
 {
+
+  struct Args
+  {
+    std::string broadcastDestination = "255.255.255.255"; // send broadcast to all listeners
+    unsigned short broadcastSendPort = 0;                 // send broadcast on any port
+    unsigned short broadcastReceiverPort = 8081;          // change me - broadcast receiver port
+    float heartbeatPeriod_seconds = 0.5;                  // seconds between heartbeats
+
+    std::string serverBindAddress = "0.0.0.0"; // bind server to any address
+    unsigned short serverBindPort = 0;         // bind server to any port
+  };
+
   boost::asio::io_context &ioc;
   boost::asio::ssl::context &ssl_context;
   std::string topic;                         // topic name
   std::shared_ptr<shared_state> sharedState; // for sending data
   unsigned short boundServerPort;
-  MultiClientSenderArgs args;
+  Args args;
 
   std::uint_fast64_t uniqueInstanceID;
 
   // establish server and get its bound addres and port
-  MultiClientSender(boost::asio::io_context &ioc_in, boost::asio::ssl::context &ssl_context_in, const std::string &topic_in, const MultiClientSenderArgs &args_in, std::uint_fast64_t uniqueInstanceID_in = 0)
+  MultiClientSender(boost::asio::io_context &ioc_in, boost::asio::ssl::context &ssl_context_in, const std::string &topic_in, const Args &args_in, std::uint_fast64_t uniqueInstanceID_in = 0, const std::shared_ptr<RateLimiting::RateTracker> &rate_tracker_in=nullptr)
       : ioc(ioc_in), ssl_context(ssl_context_in), topic(topic_in), boundServerPort(0), args(args_in), uniqueInstanceID(uniqueInstanceID_in)
   {
 
@@ -103,33 +103,11 @@ struct MultiClientSender
       heartbeatPtr->run();
   }
 
-  void SendAsync(const void * msgPtr, size_t msgSize, shared_state::CompletionHandlerT && completionHandler = shared_state::CompletionHandlerT())
+  void SendAsync(const void * msgPtr, size_t msgSize, shared_state::CompletionHandlerT && completionHandler = shared_state::CompletionHandlerT(), bool force_send=false, size_t max_queue_size = std::numeric_limits<size_t>::max())
   {
     if (sharedState)
-      sharedState->sendAsync(msgPtr, msgSize, std::forward<shared_state::CompletionHandlerT>(completionHandler));
+      sharedState->sendAsync(msgPtr, msgSize, std::forward<shared_state::CompletionHandlerT>(completionHandler), force_send, max_queue_size);
   }
-
-  // // A DANGEROUS CONVENIENCE FUNCTION THAT WILL COPY YOUR ARGS AND ASSUME THAT THE POINTER AND SIZE
-  // // PROVIDED ARE STILL VALID. for example, if you send(string.data(), string.length(), ast string), 
-  // // the the original string will get copied and fall out of scope, and the pointer you gave will 
-  // // be invalidated / not updated to point to the copy of the string
-  // // works fine if what youre capturing is a shared pointer
-  // template <class ... Args>
-  // void SendAsync( void* msgPtr, size_t msgSize, Args&&... args)
-  // {
-  //     sharedState->sendAsync(msgPtr, msgSize, std::forward<Args>(args)...);
-  // }
-
-  // // A DANGEROUS CONVENIENCE FUNCTION THAT WILL COPY YOUR ARGS AND ASSUME THAT THE POINTER AND SIZE
-  // // PROVIDED ARE STILL VALID. for example, if you send(string.data(), string.length(), ast string), 
-  // // the the original string will get copied and fall out of scope, and the pointer you gave will 
-  // // be invalidated / not updated to point to the copy of the string
-  // // works fine if what youre capturing is a shared pointer
-  // template <class ... Args>
-  // void SendAsync(const boost::asio::ip::tcp::endpoint &endpoint, void* msgPtr, size_t msgSize, Args&&... args)
-  // {
-  //     sharedState->sendAsync(endpoint, msgPtr, msgSize, std::forward<Args>(args)...);
-  // }
 };
 
 } // namespace

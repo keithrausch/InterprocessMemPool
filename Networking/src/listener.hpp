@@ -8,14 +8,11 @@
 //
 // Modified by Keith Rausch
 
-#ifndef BEASTWEBSERVER_ADVANCED_SERVER_LISTENER_HPP
-#define BEASTWEBSERVER_ADVANCED_SERVER_LISTENER_HPP
+#ifndef BEASTWEBSERVERFLEXIBLE_LISTENER_HPP
+#define BEASTWEBSERVERFLEXIBLE_LISTENER_HPP
 
-// #include "beast.h"
 #include "net.hpp"
-// #include <boost/smart_ptr.hpp>
 #include <memory>
-// #include <string>
 #include "shared_state.hpp"
 
 namespace BeastNetworking

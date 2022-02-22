@@ -96,37 +96,59 @@ template<class Derived>
 
 
 template<class Derived>
-    void websocket_session<Derived>::on_send(const void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT &&completionHandler, bool overwrite)
+    void websocket_session<Derived>::on_send(const void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT &&completionHandler, bool force_send, size_t max_queue_size)
     {
-    if (overwrite && queue_.size() > 1)
-    {
-        // std::cout << "overwriting\n";
-        auto & back = queue_.back();
-        auto & callback = std::get<2>(back);
-        if (callback)
+        // update hypothetical send stats here
+        rate_enforcer.update_hypothetical_rate(msgSize);
+
+        // if we have more messages in the queue than allowed, we need to start blowing them away
+        // BUT we cant blow away messages marked as 'must_send' nomatter what
+        // se we are basically doing our best to honor the max_queue_size, but will exceed it if we need to
+        // in order to not drop important messages
+        max_queue_size = std::max(max_queue_size, (size_t)2); // the 1st element is being sent right now, cant replace it
+
+        for (size_t i = 2; i < queue_.size() && queue_.size() >= max_queue_size ; ++i)
         {
-        callback(boost::asio::error::operation_aborted, 0);
-        callback = shared_state::CompletionHandlerT(); // not sure if this avoids move-sideeffects later
+            auto & msg = queue_[i];
+            auto & callback = std::get<2>(msg);
+            auto force = std::get<3>(msg);
+            if ( ! force)
+            {
+                if (callback)
+                {
+                    callback(boost::asio::error::operation_aborted, 0, endpoint);
+                    callback = shared_state::CompletionHandlerT(); // not sure if this avoids move-sideeffects later
+                }
+
+                // queue_.pop_back();
+                queue_.erase(queue_.begin() + i);
+                --i;
+            }
         }
-        
-        std::get<0>(back) = msgPtr;
-        std::get<1>(back) = msgSize;
-        std::get<2>(back) = std::move(completionHandler);
 
-        return;
-    }
-    // std::cout << "NOT overwriting\n";
 
-    queue_.emplace(msgPtr, msgSize, std::move(completionHandler));
+        queue_.emplace_back(msgPtr, msgSize, std::move(completionHandler), force_send);
 
-    // Are we already writing?
-    if (queue_.size() > 1)
-        return;
+        // Are we already writing?
+        if (queue_.size() > 1)
+            return;
 
-    // We are not currently writing, so send this immediately
-    derived().ws().async_write(
-        boost::asio::buffer(msgPtr, msgSize),
-        beast::bind_front_handler(&websocket_session::on_write, derived().shared_from_this()));
+        bool may_send = rate_enforcer.should_send(msgSize) || force_send;
+
+        if ( may_send )
+        {
+            // We are not currently writing, so send this immediately
+            derived().ws().async_write(
+                boost::asio::buffer(msgPtr, msgSize),
+                beast::bind_front_handler(&websocket_session::on_write, derived().shared_from_this()));
+        }
+        else
+        {
+            net::post(derived().ws().get_executor(), 
+                beast::bind_front_handler(&websocket_session::on_write, derived().shared_from_this(), boost::asio::error::operation_aborted, 0)
+                );
+        }
+
     }
 
 
@@ -136,14 +158,16 @@ template<class Derived>
         // call the user's completion handler
         auto& handler = std::get<2>(queue_.front());
         if (handler)
-            handler(ec, bytes_transferred);
+            handler(ec, bytes_transferred, endpoint);
 
         // Remove the string from the queue
-        queue_.pop();
+        queue_.pop_front();
 
         // Handle the error, if any
         if (ec)
-            return on_error(ec);
+        {
+            on_error(ec);
+        }
 
         // Send the next message if any
         if (!queue_.empty())
@@ -151,10 +175,22 @@ template<class Derived>
             auto &next = queue_.front();
             const void *msgPtr = std::get<0>(next);
             size_t msgSize = std::get<1>(next);
+            bool force = std::get<3>(next);
 
-            derived().ws().async_write(
-                boost::asio::buffer(msgPtr, msgSize),
-                beast::bind_front_handler(&websocket_session::on_write, derived().shared_from_this()));
+            bool may_send = rate_enforcer.should_send(msgSize) || force;
+
+            if (may_send)
+            {
+                derived().ws().async_write(
+                    boost::asio::buffer(msgPtr, msgSize),
+                    beast::bind_front_handler(&websocket_session::on_write, derived().shared_from_this()));
+            }
+            else
+            {
+                net::post(derived().ws().get_executor(), 
+                    beast::bind_front_handler(&websocket_session::on_write, derived().shared_from_this(), boost::asio::error::operation_aborted, 0)
+                 );
+            }
         }
     }
 
@@ -175,7 +211,11 @@ template<class Derived>
 template<class Derived>
     websocket_session<Derived>::websocket_session(
         std::shared_ptr<shared_state> const& state_in,
-        const tcp::endpoint &endpoint_in) : state_(state_in), serverPort(0), endpoint(endpoint_in)
+        const tcp::endpoint &endpoint_in) 
+        : state_(state_in), 
+        rate_enforcer(state_in && state_in->rate_tracker ? state_in->rate_tracker->make_enforcer(state_in->rate_enforcer_args) : RateLimiting::RateEnforcer()),
+        serverPort(0), 
+        endpoint(endpoint_in)
     {
         //derived().ws().binary(true); 
         // https://stackoverflow.com/questions/7730260/binary-vs-string-transfer-over-a-stream
@@ -189,6 +229,7 @@ template<class Derived>
                       unsigned short serverPort_in) 
                       : state_(state_in), 
                       resolver_(std::make_shared<tcp::resolver>(net::make_strand(ioc))), 
+                      rate_enforcer(state_in && state_in->rate_tracker ? state_in->rate_tracker->make_enforcer(state_in->rate_enforcer_args) : RateLimiting::RateEnforcer()),
                         serverAddress(serverAddress_in),
                         serverPort(serverPort_in),
                         endpoint()
@@ -206,10 +247,10 @@ template<class Derived>
             // std::lock_guard<std::mutex> guard(mutex_);
             while (queue_.size() > 0)
             {
-            auto & callback = std::get<2>(queue_.front());
-            if (callback)
-                callback(boost::asio::error::operation_aborted, 0);
-            queue_.pop();
+                auto & callback = std::get<2>(queue_.front());
+                if (callback)
+                    callback(boost::asio::error::operation_aborted, 0, endpoint);
+                queue_.pop_front();
             }
         }
 
@@ -219,7 +260,7 @@ template<class Derived>
 
 
 template<class Derived>
-    void websocket_session<Derived>::sendAsync(const void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT &&completionHandler, bool overwrite)
+    void websocket_session<Derived>::sendAsync(const void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT &&completionHandler, bool force_send, size_t max_queue_size)
     {
     // Post our work to the strand, this ensures
     // that the members of `this` will not be
@@ -227,14 +268,9 @@ template<class Derived>
 
     net::post(
         derived().ws().get_executor(),
-        beast::bind_front_handler(&websocket_session::on_send, derived().shared_from_this(), msgPtr, msgSize, std::forward<shared_state::CompletionHandlerT>(completionHandler), overwrite));
+        beast::bind_front_handler(&websocket_session::on_send, derived().shared_from_this(), msgPtr, msgSize, std::forward<shared_state::CompletionHandlerT>(completionHandler), force_send, max_queue_size));
     }
 
-template<class Derived>
-    void websocket_session<Derived>::replaceSendAsync(const void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT &&completionHandler)
-    {
-        sendAsync(msgPtr, msgSize, std::move(completionHandler), true);
-    }
 
 
   // Resolver and socket require an io_context

@@ -1,5 +1,5 @@
 
-set(CMAKE_CXX_STANDARD 17) # using std::filesystem, all else is c++11
+set(CMAKE_CXX_STANDARD 17) # using std::filesystem, shared_mutex, all else is c++11
 
 set(LIB_NAME lib_beastNetworking)
 
@@ -11,10 +11,11 @@ set(HEADERS_${LIB_NAME}
     MultiClientSender.hpp
     MultiClientReceiver.hpp
     listener.hpp
-
+    rate_limiter.hpp
+    
     # general utils
-    UtilsASIO.h
-
+    UtilsASIO.hpp
+    
     # websocket utility files
     http_session.hpp
     net.hpp
@@ -23,12 +24,13 @@ set(HEADERS_${LIB_NAME}
     )
     
     
-# all source files
+    # all source files
 set(SRC_${LIB_NAME}
     http_session.cpp
     listener.cpp
     shared_state.cpp
     websocket_session.cpp    
+    rate_limiter.cpp
     )
 
 #

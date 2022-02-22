@@ -1,13 +1,8 @@
 
-#ifndef BEASTWEBSERVER_ADVANCED_SERVER_HTTP_SESSION_HPP
-#define BEASTWEBSERVER_ADVANCED_SERVER_HTTP_SESSION_HPP
+#ifndef BEASTWEBSERVERFLEXIBLE_HTTP_SESSION_HPP
+#define BEASTWEBSERVERFLEXIBLE_HTTP_SESSION_HPP
 
-// #include "beast.h"
 #include "net.hpp"
-// #include <boost/smart_ptr.hpp>
-// #include <memory>
-// #include <string>
-// #include "shared_state.hpp"
 
 #include <boost/beast/websocket.hpp>
 #include "websocket_session.hpp"

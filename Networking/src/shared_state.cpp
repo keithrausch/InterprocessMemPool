@@ -15,7 +15,6 @@
 //------------------------------------------------------------------------------
 
 #include "shared_state.hpp"
-// #include "advanced_server_flex.hpp"
 #include "websocket_session.hpp"
 
 namespace BeastNetworking
@@ -95,10 +94,12 @@ void shared_state::leave(ssl_websocket_session *session)
 
 // Broadcast a message to all websocket client sessions
 void shared_state::
-    sendAsync(const void* msgPtr, size_t msgSize, CompletionHandlerT &&completionHandler, bool overwrite)
+    sendAsync(const void* msgPtr, size_t msgSize, CompletionHandlerT &&completionHandler, bool force_send, size_t max_queue_size)
 {
   if (nullptr == msgPtr || 0 == msgSize)
     return;
+
+    bool sent_to_any = false;
 
     {
         // Make a local list of all the weak pointers representing
@@ -109,14 +110,21 @@ void shared_state::
             sessionPointerPool.clear();
             sessionPointerPool.reserve(sessions_.size());
             for (auto p : sessions_)
-            sessionPointerPool.emplace_back(p->weak_from_this());
+            {
+              sessionPointerPool.emplace_back(p->weak_from_this());
+            }
         }
 
         // For each session in our local list, try to acquire a strong
         // pointer. If successful, then send the message on that session.
         for (auto const &wp : sessionPointerPool)
+        {
             if (auto sp = wp.lock())
-            sp->sendAsync(msgPtr, msgSize, std::forward<CompletionHandlerT>(completionHandler), overwrite);
+            {
+              sp->sendAsync(msgPtr, msgSize, std::forward<CompletionHandlerT>(completionHandler), force_send, max_queue_size);
+              sent_to_any = true;
+            }
+        }
     }
 
     // NOW DO SSL
@@ -130,44 +138,65 @@ void shared_state::
             sessionPointerPoolSSL.clear();
             sessionPointerPoolSSL.reserve(sessionsSSL_.size());
             for (auto p : sessionsSSL_)
+            {
               sessionPointerPoolSSL.emplace_back(p->weak_from_this());
+            }
         }
 
         // For each session in our local list, try to acquire a strong
         // pointer. If successful, then send the message on that session.
         for (auto const &wp : sessionPointerPoolSSL)
+        {
             if (auto sp = wp.lock())
-            sp->sendAsync(msgPtr, msgSize, std::forward<CompletionHandlerT>(completionHandler), overwrite);
+            {
+              sp->sendAsync(msgPtr, msgSize, std::forward<CompletionHandlerT>(completionHandler), force_send, max_queue_size);
+              sent_to_any = true;
+            }
+        }
+    }
+
+    if ( ! sent_to_any && completionHandler)
+    {
+      completionHandler(boost::asio::error::not_connected, 0, endpointT());
     }
 }
 
 // Broadcast a message to all websocket client sessions
 void shared_state::
-    sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, const void* msgPtr, size_t msgSize, CompletionHandlerT &&completionHandler, bool overwrite)
+    sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, const void* msgPtr, size_t msgSize, CompletionHandlerT &&completionHandler, bool force_send, size_t max_queue_size)
 {
   if (nullptr == msgPtr || 0 == msgSize)
     return;
+
+    bool sent_to_any = false;
 
     {
         // Make a local list of all the weak pointers representing
         // the sessions, so we can do the actual sending without
         // holding the mutex:
         {
-            std::lock_guard<MutexT> lock(mutex_);
-            sessionPointerPool.clear();
-            sessionPointerPool.reserve(sessions_.size());
-            for (auto p : sessions_)
-              sessionPointerPool.emplace_back(p->weak_from_this());
+          std::lock_guard<MutexT> lock(mutex_);
+          sessionPointerPool.clear();
+          sessionPointerPool.reserve(sessions_.size());
+          for (auto p : sessions_)
+          {
+            sessionPointerPool.emplace_back(p->weak_from_this());
+          }
         }
 
         // For each session in our local list, try to acquire a strong
         // pointer. If successful, then send the message on that session.
         for (auto const &wp : sessionPointerPool)
-            if (auto sp = wp.lock())
-            {
+        {
+          if (auto sp = wp.lock())
+          {
             if (sp->endpoint == endpoint)
-                sp->sendAsync(msgPtr, msgSize, std::forward<CompletionHandlerT>(completionHandler), overwrite);
+            {
+                sp->sendAsync(msgPtr, msgSize, std::forward<CompletionHandlerT>(completionHandler), force_send, max_queue_size);
+                sent_to_any = true;
             }
+          }
+        }
     }
 
     // NOW DO SSL
@@ -177,47 +206,48 @@ void shared_state::
         // the sessions, so we can do the actual sending without
         // holding the mutex:
         {
-            std::lock_guard<MutexT> lock(mutex_);
-            sessionPointerPoolSSL.clear();
-            sessionPointerPoolSSL.reserve(sessionsSSL_.size());
-            for (auto p : sessionsSSL_)
+          std::lock_guard<MutexT> lock(mutex_);
+          sessionPointerPoolSSL.clear();
+          sessionPointerPoolSSL.reserve(sessionsSSL_.size());
+          for (auto p : sessionsSSL_)
+          {
             sessionPointerPoolSSL.emplace_back(p->weak_from_this());
+          }
         }
 
         // For each session in our local list, try to acquire a strong
         // pointer. If successful, then send the message on that session.
         for (auto const &wp : sessionPointerPoolSSL)
-            if (auto sp = wp.lock())
-            {
+        {
+          if (auto sp = wp.lock())
+          {
             if (sp->endpoint == endpoint)
-                sp->sendAsync(msgPtr, msgSize, std::forward<CompletionHandlerT>(completionHandler), overwrite);
+            {
+                sp->sendAsync(msgPtr, msgSize, std::forward<CompletionHandlerT>(completionHandler), force_send, max_queue_size);
             }
+          }
+        }
     }
+
+
+  if ( ! sent_to_any && completionHandler)
+  {
+    completionHandler(boost::asio::error::not_connected, 0, endpointT());
+  }
 }
 
 
-void shared_state::sendAsync(const std::string &str)
+void shared_state::sendAsync(const std::string &str, bool force_send, size_t max_queue_size)
 {
     std::shared_ptr<std::string> strPtr = std::make_shared<std::string>(str);
 
-    sendAsync((void*)(strPtr->data()), strPtr->length(), [strPtr](beast::error_code, size_t){});
+    sendAsync((void*)(strPtr->data()), strPtr->length(), [strPtr](beast::error_code, size_t, const endpointT &){}, force_send, max_queue_size);
 }
 
-void shared_state::sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, const std::string &str)
+void shared_state::sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, const std::string &str, bool force_send, size_t max_queue_size)
 {
     std::shared_ptr<std::string> strPtr = std::make_shared<std::string>(str);
-    sendAsync(endpoint, (void*)(strPtr->data()), strPtr->length(), [strPtr](beast::error_code, size_t){});
-}
-
-
-void shared_state::replaceSendAsync(const void* msgPtr, size_t msgSize, CompletionHandlerT &&completionHandler)
-{
-    sendAsync(msgPtr, msgSize, std::forward<CompletionHandlerT>(completionHandler), true);
-}
-
-void shared_state::replaceSendAsync(const boost::asio::ip::tcp::endpoint &endpoint, const void* msgPtr, size_t msgSize, CompletionHandlerT &&completionHandler)
-{
-    sendAsync(endpoint, msgPtr, msgSize, std::forward<CompletionHandlerT>(completionHandler), true);
+    sendAsync(endpoint, (void*)(strPtr->data()), strPtr->length(), [strPtr](beast::error_code, size_t, const endpointT &){}, force_send, max_queue_size);
 }
 
 void shared_state::on_read(const tcp::endpoint &endpoint, const void *msgPtr, size_t msgSize)

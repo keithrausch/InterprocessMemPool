@@ -1,7 +1,7 @@
 // Keith Rausch
 
-#ifndef UTILS_ASIO_H
-#define UTILS_ASIO_H
+#ifndef BEASTWEBSERVERFLEXIBLE_UTILS_ASIO_HPP
+#define BEASTWEBSERVERFLEXIBLE_UTILS_ASIO_HPP
 
 #include <boost/enable_shared_from_this.hpp>
 #include <boost/beast.hpp>

@@ -3,6 +3,7 @@
 #ifndef BEASTWEBSERVERFLEXIBLE_MULTI_CLIENT_RECEIVER_HPP
 #define BEASTWEBSERVERFLEXIBLE_MULTI_CLIENT_RECEIVER_HPP
 
+#include <atomic>
 #include "UtilsASIO.hpp"
 #include <regex>
 #include <unordered_map>
@@ -13,18 +14,11 @@
 namespace BeastNetworking
 {
 
-struct MultiClientReceiver
+
+class MultiClientReceiver : public std::enable_shared_from_this<MultiClientReceiver>
 {
 
-  struct Args
-  {
-    unsigned short broadcastRcvPort = 8081;
-    size_t maxMessageLength = 500;
-    double timeout_seconds = 3;
-    bool permitLoopback = true;
-    bool verbose = false;
-    bool useSSL = true;
-  };
+  private:
 
   struct SenderCharacteristics
   {
@@ -69,18 +63,6 @@ struct MultiClientReceiver
     }
   };
 
-  typedef std::unordered_map<std::string, std::shared_ptr<shared_state>> TopicStatesT;
-
-  boost::asio::io_context &io_context;
-  boost::asio::ssl::context &ssl_context;
-  TopicStatesT topicStates;
-  std::unordered_map<std::string, std::weak_ptr<plain_websocket_session>> clients; // TODO this assumes that we cant get the same topic from two different places
-  std::unordered_map<std::string, std::weak_ptr<ssl_websocket_session>> clientsSSL; // TODO this assumes that we cant get the same topic from two different places
-  std::mutex clientsMutex;
-  std::shared_ptr<utils_asio::UDPReceiver> udpReceiverPtr;
-  Args args;
-
-  std::uint_fast64_t uniqueInstanceID;
 
   template <typename EndpointT>
   std::string UniqueClientName(const std::string &topic, const EndpointT &endpoint)
@@ -88,16 +70,79 @@ struct MultiClientReceiver
     return "__" + topic + "__" + EndpointToString(endpoint);
   }
 
-  MultiClientReceiver(boost::asio::io_context &io_context_in, boost::asio::ssl::context &ssl_context_in, const TopicStatesT &topicStates_in, const Args &args_in, std::uint_fast64_t uniqueInstanceID_in = 0)
-      : io_context(io_context_in), ssl_context(ssl_context_in), topicStates(topicStates_in), args(args_in), uniqueInstanceID(uniqueInstanceID_in)
+  bool ConnectToServer(const std::string &topic, boost::asio::ip::tcp::endpoint serverEndpoint)
   {
+    bool created_client = false;
+
+    auto &state = topicStates[topic];
+
+    auto uniqueClientName = UniqueClientName(topic, serverEndpoint);
+
+    if (args.useSSL)
+    {
+      // we have to not already have an active session
+      std::shared_ptr<ssl_websocket_session> client;
+      
+      std::lock_guard<std::mutex> lock(clientsMutex); // leave this locked, we access clients again below
+      client = clientsSSL[uniqueClientName].lock();
+      
+      if (client)
+        return created_client; // this session is still alive and kicking, leave it
+
+      // this client does not already exist, we get to create a new one
+      // client = std::make_shared<WebSocketSessionClient>(io_context,
+      //                                         ssl_context,
+      //                                         state,
+      //                                         serverEndpoint.address().to_string(),
+      //                                         serverEndpoint.port(),
+      //                                         args.useSSL);
+      client = BeastNetworking::make_websocket_session_client(io_context, 
+                                                              ssl_context, 
+                                                              state, 
+                                                              serverEndpoint.address().to_string(),
+                                                              serverEndpoint.port());
+
+      if (client)
+      {
+        client->RunClient();
+        clientsSSL[uniqueClientName] = client;
+        created_client = true;
+      }
+    }
+    else
+    {
+      // we have to not already have an active session
+      std::shared_ptr<plain_websocket_session> client;
+      
+      std::lock_guard<std::mutex> lock(clientsMutex); // leave this locked, we access clients again below
+      client = clients[uniqueClientName].lock();
+      
+      if (client)
+        return created_client; // this session is still alive and kicking, leave it
+
+      // this client does not already exist, we get to create a new one
+      // client = std::make_shared<plain_websocket_session>(io_context,
+      //                                         ssl_context,
+      //                                         state,
+      //                                         serverEndpoint.address().to_string(),
+      //                                         serverEndpoint.port(),
+      //                                         args.useSSL);
+      client = BeastNetworking::make_websocket_session_client(io_context, 
+                                                              state, 
+                                                              serverEndpoint.address().to_string(),
+                                                              serverEndpoint.port());
+
+      if (client)
+      {
+        client->RunClient();
+        clients[uniqueClientName] = client;
+        created_client = true;
+      }
+    }
+
+    return created_client;
   }
 
-  template <typename EndpointT>
-  static std::string EndpointToString(const /*boost::asio::ip::udp::endpoint*/ EndpointT &endpoint)
-  {
-    return endpoint.address().to_string() + ":" + std::to_string(endpoint.port());
-  }
 
   void ProcessBroadcast(const boost::asio::ip::udp::endpoint &endpoint, const void *msgPtr, size_t msgSize)
   {
@@ -143,70 +188,74 @@ struct MultiClientReceiver
         std::printf("MultiClientReceiver::ProcessBroadcast() - received a broadcast for topic \"%s\", but no callbacks for it were provided...\n", topic.c_str());
       return;
     }
-    auto &state = topicStates[topic];
 
-    auto uniqueClientName = UniqueClientName(topic, serverEndpoint);
+    ConnectToServer(topic, serverEndpoint);
 
-    if (args.useSSL)
+  }
+
+  void on_wait(std::string topic, boost::asio::ip::tcp::endpoint serverEndpoint, std::shared_ptr<boost::asio::steady_timer> timer, double period_seconds, const boost::system::error_code &error)
+  {
+    if (error)
     {
-      // we have to not already have an active session
-      std::shared_ptr<ssl_websocket_session> client;
-      
-      std::lock_guard<std::mutex> lock(clientsMutex); // leave this locked, we access clients again below
-      client = clientsSSL[uniqueClientName].lock();
-      
-      if (client)
-        return; // this session is still alive and kicking, leave it
-
-      // this client does not already exist, we get to create a new one
-      // client = std::make_shared<WebSocketSessionClient>(io_context,
-      //                                         ssl_context,
-      //                                         state,
-      //                                         serverEndpoint.address().to_string(),
-      //                                         serverEndpoint.port(),
-      //                                         args.useSSL);
-      client = BeastNetworking::make_websocket_session_client(io_context, 
-                                                              ssl_context, 
-                                                              state, 
-                                                              serverEndpoint.address().to_string(),
-                                                              serverEndpoint.port());
-
-      if (client)
-      {
-        client->RunClient();
-        clientsSSL[uniqueClientName] = client;
-      }
-    }
-    else
-    {
-      // we have to not already have an active session
-      std::shared_ptr<plain_websocket_session> client;
-      
-      std::lock_guard<std::mutex> lock(clientsMutex); // leave this locked, we access clients again below
-      client = clients[uniqueClientName].lock();
-      
-      if (client)
-        return; // this session is still alive and kicking, leave it
-
-      // this client does not already exist, we get to create a new one
-      // client = std::make_shared<plain_websocket_session>(io_context,
-      //                                         ssl_context,
-      //                                         state,
-      //                                         serverEndpoint.address().to_string(),
-      //                                         serverEndpoint.port(),
-      //                                         args.useSSL);
-      client = BeastNetworking::make_websocket_session_client(io_context, 
-                                                              state, 
-                                                              serverEndpoint.address().to_string(),
-                                                              serverEndpoint.port());
-
-      if (client)
-      {
-        client->RunClient();
-        clients[uniqueClientName] = client;
-      }
+      return;
     }
 
+    try_connection(topic, serverEndpoint, timer, period_seconds);
+  }
+
+  void try_connection(std::string topic, boost::asio::ip::tcp::endpoint serverEndpoint, std::shared_ptr<boost::asio::steady_timer> timer, double period_seconds)
+  {
+    bool created_new_client = ConnectToServer(topic, serverEndpoint);
+    if (created_new_client && args.verbose)
+    {
+      std::cout << "InterprocessMemPool::try_connection() - created new connection for topic \"" + topic + "\" at endpoint: " + EndpointToString(serverEndpoint) + "\n";
+    }
+
+    timer->expires_after(boost::asio::chrono::milliseconds((size_t)(period_seconds * 1000))); // cancels the timer and resets it
+    timer->async_wait(boost::beast::bind_front_handler(&MultiClientReceiver::on_wait, shared_from_this(), topic, serverEndpoint, timer, period_seconds));
+  }
+
+  public:
+
+  struct Args
+  {
+    unsigned short broadcastRcvPort = 8081;
+    size_t maxMessageLength = 500;
+    double timeout_seconds = 3;
+    bool permitLoopback = true;
+    bool verbose = false;
+    bool useSSL = true;
+  };
+
+  typedef std::unordered_map<std::string, std::shared_ptr<shared_state>> TopicStatesT;
+
+  boost::asio::io_context &io_context;
+  boost::asio::ssl::context &ssl_context;
+  TopicStatesT topicStates;
+  std::unordered_map<std::string, std::weak_ptr<plain_websocket_session>> clients; // TODO this assumes that we cant get the same topic from two different places
+  std::unordered_map<std::string, std::weak_ptr<ssl_websocket_session>> clientsSSL; // TODO this assumes that we cant get the same topic from two different places
+  std::mutex clientsMutex;
+  std::shared_ptr<utils_asio::UDPReceiver> udpReceiverPtr;
+  Args args;
+
+  std::uint_fast64_t uniqueInstanceID;
+
+  template <typename EndpointT>
+  static std::string EndpointToString(const /*boost::asio::ip::udp::endpoint*/ EndpointT &endpoint)
+  {
+    return endpoint.address().to_string() + ":" + std::to_string(endpoint.port());
+  }
+
+  MultiClientReceiver(boost::asio::io_context &io_context_in, boost::asio::ssl::context &ssl_context_in, const TopicStatesT &topicStates_in, const Args &args_in, std::uint_fast64_t uniqueInstanceID_in = 0)
+      : io_context(io_context_in), ssl_context(ssl_context_in), topicStates(topicStates_in), args(args_in), uniqueInstanceID(uniqueInstanceID_in)
+  {
+  }
+
+  void RequestTopics(std::string topic, boost::asio::ip::tcp::endpoint serverEndpoint, double period_seconds)
+  {
+    auto timer = std::make_shared<boost::asio::steady_timer>(io_context);
+    if (timer)
+      boost::asio::post(io_context, boost::beast::bind_front_handler(&MultiClientReceiver::try_connection, shared_from_this(), topic, serverEndpoint, timer, period_seconds));
   }
 
   void ListenForTopics()
@@ -281,6 +330,31 @@ struct MultiClientReceiver
         client->sendAsync((*strPtr).data(), (*strPtr).length(), [strPtr](boost::beast::error_code, size_t, const boost::asio::ip::tcp::endpoint &){}, force_send, max_queue_size);
     }
   }
+
+  void count_connections(size_t &nConnections_insecure, size_t &nConnections_ssl )
+  {
+
+    nConnections_insecure = 0;
+    nConnections_ssl = 0;
+
+    { // lock guard      
+      std::lock_guard<std::mutex> lock(clientsMutex); // leave this locked, we access clients again below
+
+      for (auto & pair : clientsSSL)
+      {
+        if (pair.second.lock())
+          ++nConnections_ssl;
+      }
+
+      for (auto & pair : clients)
+      {
+        if (pair.second.lock())
+          ++nConnections_insecure;
+      }
+
+    }
+  }
+
 };
 
 } // namespace

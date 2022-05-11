@@ -193,7 +193,7 @@ namespace utils_asio
   public:
     Heartbeat(boost::asio::io_context &io_context_in, const MsgCreatorT &msgCreator_in, unsigned short portSender, const std::string &destination, unsigned short portReceiver, float period_seconds_in)
         : io_context(io_context_in),
-          socket(io_context, udp::endpoint(udp::v4(), portSender)),
+          socket(io_context, udp::v4()),
           receiver_endpoint(boost::asio::ip::address_v4::from_string(destination), portReceiver),
           timer(io_context),
           period_seconds(period_seconds_in),
@@ -203,6 +203,7 @@ namespace utils_asio
     {
       socket.set_option(udp::socket::reuse_address(true));
       socket.set_option(boost::asio::socket_base::broadcast(true));
+      socket.bind(udp::endpoint(udp::v4(), portSender));
     }
 
     void run()

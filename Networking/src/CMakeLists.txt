@@ -43,13 +43,16 @@ find_package(OpenSSL REQUIRED)
 include_directories(../boost/boost_1_76_0/boost)
   
 # set up the library we are building
-add_library(${LIB_NAME} ${HEADERS_${LIB_NAME}} ${SRC_${LIB_NAME}})
+add_library(${LIB_NAME} STATIC ${HEADERS_${LIB_NAME}} ${SRC_${LIB_NAME}})
 set_target_properties(${LIB_NAME} PROPERTIES LINKER_LANGUAGE CXX)
 
 target_include_directories(${LIB_NAME} PUBLIC .)
 
 target_link_libraries(${LIB_NAME}
+    atomic
     OpenSSL::SSL 
     OpenSSL::Crypto
 )
+
+set_target_properties(${LIB_NAME} PROPERTIES POSITION_INDEPENDENT_CODE ON)
 

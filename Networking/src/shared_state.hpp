@@ -101,8 +101,8 @@ public:
   void leave(plain_websocket_session *session);
   void join(ssl_websocket_session *session);
   void leave(ssl_websocket_session *session);
-  void sendAsync(const void * msgPtr, size_t msgSize, CompletionHandlerT &&completionHandler = CompletionHandlerT(), bool force_send=false, size_t max_queue_size=std::numeric_limits<size_t>::max());
-  void sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, const void * msgPtr, size_t msgSize, CompletionHandlerT &&completionHandler = CompletionHandlerT(), bool force_send=false, size_t max_queue_size=std::numeric_limits<size_t>::max());
+  void sendAsync(const void * msgPtr, size_t msgSize, const CompletionHandlerT &completionHandler = CompletionHandlerT(), bool force_send=false, size_t max_queue_size=std::numeric_limits<size_t>::max());
+  void sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, const void * msgPtr, size_t msgSize, const CompletionHandlerT &completionHandler = CompletionHandlerT(), bool force_send=false, size_t max_queue_size=std::numeric_limits<size_t>::max());
   void on_read(const boost::asio::ip::tcp::endpoint &endpoint, const void * msgPtr, size_t msgSize);
   void on_error(const boost::asio::ip::tcp::endpoint &endpoint, beast::error_code ec);
 

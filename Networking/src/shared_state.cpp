@@ -94,7 +94,7 @@ void shared_state::leave(ssl_websocket_session *session)
 
 // Broadcast a message to all websocket client sessions
 void shared_state::
-    sendAsync(const void* msgPtr, size_t msgSize, CompletionHandlerT &&completionHandler, bool force_send, size_t max_queue_size)
+    sendAsync(const void* msgPtr, size_t msgSize, const CompletionHandlerT &completionHandler, bool force_send, size_t max_queue_size)
 {
   if (nullptr == msgPtr || 0 == msgSize)
     return;
@@ -121,7 +121,7 @@ void shared_state::
         {
             if (auto sp = wp.lock())
             {
-              sp->sendAsync(msgPtr, msgSize, std::forward<CompletionHandlerT>(completionHandler), force_send, max_queue_size);
+              sp->sendAsync(msgPtr, msgSize, completionHandler, force_send, max_queue_size);
               sent_to_any = true;
             }
         }
@@ -149,7 +149,7 @@ void shared_state::
         {
             if (auto sp = wp.lock())
             {
-              sp->sendAsync(msgPtr, msgSize, std::forward<CompletionHandlerT>(completionHandler), force_send, max_queue_size);
+              sp->sendAsync(msgPtr, msgSize, completionHandler, force_send, max_queue_size);
               sent_to_any = true;
             }
         }
@@ -163,7 +163,7 @@ void shared_state::
 
 // Broadcast a message to all websocket client sessions
 void shared_state::
-    sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, const void* msgPtr, size_t msgSize, CompletionHandlerT &&completionHandler, bool force_send, size_t max_queue_size)
+    sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, const void* msgPtr, size_t msgSize, const CompletionHandlerT &completionHandler, bool force_send, size_t max_queue_size)
 {
   if (nullptr == msgPtr || 0 == msgSize)
     return;
@@ -192,7 +192,7 @@ void shared_state::
           {
             if (sp->endpoint == endpoint)
             {
-                sp->sendAsync(msgPtr, msgSize, std::forward<CompletionHandlerT>(completionHandler), force_send, max_queue_size);
+                sp->sendAsync(msgPtr, msgSize, completionHandler, force_send, max_queue_size);
                 sent_to_any = true;
             }
           }
@@ -223,7 +223,7 @@ void shared_state::
           {
             if (sp->endpoint == endpoint)
             {
-                sp->sendAsync(msgPtr, msgSize, std::forward<CompletionHandlerT>(completionHandler), force_send, max_queue_size);
+                sp->sendAsync(msgPtr, msgSize, completionHandler, force_send, max_queue_size);
             }
           }
         }

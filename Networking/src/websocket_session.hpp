@@ -129,7 +129,7 @@ public:
     ~websocket_session();
 
 
-    void sendAsync(const void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT &&completionHandler, bool force_send=false, size_t max_queue_size=std::numeric_limits<size_t>::max());
+    void sendAsync(const void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT completionHandler, bool force_send=false, size_t max_queue_size=std::numeric_limits<size_t>::max());
 
     // void replaceSendAsync(const void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT &&completionHandler);
 

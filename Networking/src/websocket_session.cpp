@@ -201,6 +201,15 @@ template<class Derived>
     if (ec)
       return on_error(ec);
 
+    derived().ws().binary(true);
+    // https://stackoverflow.com/questions/7730260/binary-vs-string-transfer-over-a-stream
+    // means bytes sent are bytes received, no UTF-8 text encode/decode
+
+    if (state_->callbacks.callbackAccept)
+    {
+        state_->callbacks.callbackAccept(endpoint);
+    }
+
     // Send the message
     derived().ws().async_read(
         buffer_,
@@ -217,9 +226,6 @@ template<class Derived>
         serverPort(0), 
         endpoint(endpoint_in)
     {
-        //derived().ws().binary(true); 
-        // https://stackoverflow.com/questions/7730260/binary-vs-string-transfer-over-a-stream
-        // means bytes sent are bytes received, no UTF-8 text encode/decode
     }
 
 template<class Derived>
@@ -234,9 +240,6 @@ template<class Derived>
                         serverPort(serverPort_in),
                         endpoint()
     {
-        //derived().ws().binary(true); 
-        // https://stackoverflow.com/questions/7730260/binary-vs-string-transfer-over-a-stream
-        // means bytes sent are bytes received, no UTF-8 text encode/decode
     }
 
 
@@ -260,7 +263,7 @@ template<class Derived>
 
 
 template<class Derived>
-    void websocket_session<Derived>::sendAsync(const void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT &&completionHandler, bool force_send, size_t max_queue_size)
+    void websocket_session<Derived>::sendAsync(const void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT completionHandler /*mae copy*/, bool force_send, size_t max_queue_size)
     {
     // Post our work to the strand, this ensures
     // that the members of `this` will not be
@@ -268,7 +271,7 @@ template<class Derived>
 
     net::post(
         derived().ws().get_executor(),
-        beast::bind_front_handler(&websocket_session::on_send, derived().shared_from_this(), msgPtr, msgSize, std::forward<shared_state::CompletionHandlerT>(completionHandler), force_send, max_queue_size));
+        beast::bind_front_handler(&websocket_session::on_send, derived().shared_from_this(), msgPtr, msgSize, std::move(completionHandler), force_send, max_queue_size));
     }
 
 

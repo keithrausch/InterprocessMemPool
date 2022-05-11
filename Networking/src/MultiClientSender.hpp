@@ -24,6 +24,7 @@ struct MultiClientSender
 
     std::string serverBindAddress = "0.0.0.0"; // bind server to any address
     unsigned short serverBindPort = 0;         // bind server to any port
+    bool verbose = false;
   };
 
   boost::asio::io_context &ioc;
@@ -52,8 +53,11 @@ struct MultiClientSender
       std::printf("PRODUCER-READ - endpoint: %s\n%s\n", endpointString.c_str(), msg.c_str());
     };
 
-    callbacks.callbackAccept = [](const tcp::endpoint &endpoint) { std::cout << "PRODUCER-ACCEPT - endpoint: " << endpoint << std::endl; };
-    callbacks.callbackClose = [](const tcp::endpoint &endpoint) { std::cout << "PRODUCER-CLOSE - endpoint: " << endpoint << std::endl; };
+    if (args.verbose)
+    {
+      callbacks.callbackAccept = [](const tcp::endpoint &endpoint) { std::cout << "InterprocessMemPool::MultiClientSender::on_accept() - accepting endpoint: " << endpoint << std::endl; };
+      callbacks.callbackClose = [](const tcp::endpoint &endpoint) { std::cout << "InterprocessMemPool::MultiClientSender::on_close() - closing endpoint: " << endpoint << std::endl; };
+    }
 
     sharedState = std::make_shared<shared_state>(callbacks);
 

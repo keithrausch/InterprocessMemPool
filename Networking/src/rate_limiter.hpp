@@ -90,7 +90,7 @@ namespace RateLimiting
         private:
         Timer unlimited_timer;
         double unlimited_rate;
-        std::atomic<size_t> allowed_rate;
+        CopyableAtomic<size_t> allowed_rate;
         Timer actual_timer;
         double actual_rate;
         std::shared_ptr<RateTracker> rate_tracker;
@@ -104,6 +104,7 @@ namespace RateLimiting
         public:
 
         RateEnforcer();
+        RateEnforcer(RateEnforcer&& rate_enforcer) = default;
         ~RateEnforcer();
         void update_hypothetical_rate(size_t nBytes);
         bool should_send(size_t nBytes);

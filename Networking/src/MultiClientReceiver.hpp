@@ -3,6 +3,7 @@
 #ifndef BEASTWEBSERVERFLEXIBLE_MULTI_CLIENT_RECEIVER_HPP
 #define BEASTWEBSERVERFLEXIBLE_MULTI_CLIENT_RECEIVER_HPP
 
+#include "args.hpp"
 #include <atomic>
 #include "UtilsASIO.hpp"
 #include <regex>
@@ -208,7 +209,7 @@ class MultiClientReceiver : public std::enable_shared_from_this<MultiClientRecei
     bool created_new_client = ConnectToServer(topic, serverEndpoint);
     if (created_new_client && args.verbose)
     {
-      std::cout << "InterprocessMemPool::try_connection() - created new connection for topic \"" + topic + "\" at endpoint: " + EndpointToString(serverEndpoint) + "\n";
+      std::cout << "InterprocessMemPool::try_connection() - creating new connection for topic \"" + topic + "\" at endpoint: " + EndpointToString(serverEndpoint) + "\n";
     }
 
     timer->expires_after(boost::asio::chrono::milliseconds((size_t)(period_seconds * 1000))); // cancels the timer and resets it
@@ -217,15 +218,6 @@ class MultiClientReceiver : public std::enable_shared_from_this<MultiClientRecei
 
   public:
 
-  struct Args
-  {
-    unsigned short broadcastRcvPort = 8081;
-    size_t maxMessageLength = 500;
-    double timeout_seconds = 3;
-    bool permitLoopback = true;
-    bool verbose = false;
-    bool useSSL = true;
-  };
 
   typedef std::unordered_map<std::string, std::shared_ptr<shared_state>> TopicStatesT;
 
@@ -236,7 +228,7 @@ class MultiClientReceiver : public std::enable_shared_from_this<MultiClientRecei
   std::unordered_map<std::string, std::weak_ptr<ssl_websocket_session>> clientsSSL; // TODO this assumes that we cant get the same topic from two different places
   std::mutex clientsMutex;
   std::shared_ptr<utils_asio::UDPReceiver> udpReceiverPtr;
-  Args args;
+  MultiClientReceiverArgs args;
 
   std::uint_fast64_t uniqueInstanceID;
 
@@ -246,7 +238,7 @@ class MultiClientReceiver : public std::enable_shared_from_this<MultiClientRecei
     return endpoint.address().to_string() + ":" + std::to_string(endpoint.port());
   }
 
-  MultiClientReceiver(boost::asio::io_context &io_context_in, boost::asio::ssl::context &ssl_context_in, const TopicStatesT &topicStates_in, const Args &args_in, std::uint_fast64_t uniqueInstanceID_in = 0)
+  MultiClientReceiver(boost::asio::io_context &io_context_in, boost::asio::ssl::context &ssl_context_in, const TopicStatesT &topicStates_in, const MultiClientReceiverArgs &args_in, std::uint_fast64_t uniqueInstanceID_in = 0)
       : io_context(io_context_in), ssl_context(ssl_context_in), topicStates(topicStates_in), args(args_in), uniqueInstanceID(uniqueInstanceID_in)
   {
   }

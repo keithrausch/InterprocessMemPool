@@ -3,6 +3,7 @@
 #ifndef BEASTWEBSERVERFLEXIBLE_MULTI_CLIENT_SENDER_HPP
 #define BEASTWEBSERVERFLEXIBLE_MULTI_CLIENT_SENDER_HPP
 
+#include "args.hpp"
 #include "UtilsASIO.hpp"
 #include "shared_state.hpp"
 #include "listener.hpp"
@@ -15,29 +16,18 @@ namespace BeastNetworking
 struct MultiClientSender
 {
 
-  struct Args
-  {
-    std::string broadcastDestination = "255.255.255.255"; // send broadcast to all listeners
-    unsigned short broadcastSendPort = 0;                 // send broadcast on any port
-    unsigned short broadcastReceiverPort = 8081;          // change me - broadcast receiver port
-    float heartbeatPeriod_seconds = 0.5;                  // seconds between heartbeats
-
-    std::string serverBindAddress = "0.0.0.0"; // bind server to any address
-    unsigned short serverBindPort = 0;         // bind server to any port
-    bool verbose = false;
-  };
 
   boost::asio::io_context &ioc;
   boost::asio::ssl::context &ssl_context;
   std::string topic;                         // topic name
   std::shared_ptr<shared_state> sharedState; // for sending data
   unsigned short boundServerPort;
-  Args args;
+  MultiClientSenderArgs args;
 
   std::uint_fast64_t uniqueInstanceID;
 
   // establish server and get its bound addres and port
-  MultiClientSender(boost::asio::io_context &ioc_in, boost::asio::ssl::context &ssl_context_in, const std::string &topic_in, const Args &args_in, std::uint_fast64_t uniqueInstanceID_in = 0, const std::shared_ptr<RateLimiting::RateTracker> &rate_tracker_in=nullptr)
+  MultiClientSender(boost::asio::io_context &ioc_in, boost::asio::ssl::context &ssl_context_in, const std::string &topic_in, const MultiClientSenderArgs &args_in, std::uint_fast64_t uniqueInstanceID_in = 0, const std::shared_ptr<RateLimiting::RateTracker> &rate_tracker_in=nullptr)
       : ioc(ioc_in), ssl_context(ssl_context_in), topic(topic_in), boundServerPort(0), args(args_in), uniqueInstanceID(uniqueInstanceID_in)
   {
 
@@ -53,17 +43,19 @@ struct MultiClientSender
       std::printf("PRODUCER-READ - endpoint: %s\n%s\n", endpointString.c_str(), msg.c_str());
     };
 
+    tcp::endpoint our_endpoint(net::ip::make_address(args.serverBindAddress), args.serverBindPort);
+
+
     if (args.verbose)
     {
-      callbacks.callbackAccept = [](const tcp::endpoint &endpoint) { std::cout << "InterprocessMemPool::MultiClientSender::on_accept() - accepting endpoint: " << endpoint << std::endl; };
-      callbacks.callbackClose = [](const tcp::endpoint &endpoint) { std::cout << "InterprocessMemPool::MultiClientSender::on_close() - closing endpoint: " << endpoint << std::endl; };
+      callbacks.callbackAccept = [our_endpoint](const tcp::endpoint &endpoint) { std::cout << "InterprocessMemPool::MultiClientSender::on_accept() - our endpoint: "<< our_endpoint <<", accepting endpoint: " << endpoint << std::endl; };
+      callbacks.callbackClose = [our_endpoint](const tcp::endpoint &endpoint) { std::cout << "InterprocessMemPool::MultiClientSender::on_close() - our endpoint: "<< our_endpoint<< ", closing endpoint: " << endpoint << std::endl; };
     }
 
     sharedState = std::make_shared<shared_state>(callbacks);
 
     // bind to any address, any port
-    tcp::endpoint endpoint(net::ip::make_address(args.serverBindAddress), args.serverBindPort);
-    auto listenerPtr = std::make_shared<listener>(ioc, ssl_context, endpoint, sharedState);
+    auto listenerPtr = std::make_shared<listener>(ioc, ssl_context, our_endpoint, sharedState);
     if (listenerPtr)
     {
       listenerPtr->run();

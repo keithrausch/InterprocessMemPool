@@ -7,6 +7,8 @@ set(LIB_NAME lib_beastNetworking)
 # all headers
 set(HEADERS_${LIB_NAME}
 
+    args.hpp
+
     # top level classes
     MultiClientSender.hpp
     MultiClientReceiver.hpp
@@ -39,17 +41,22 @@ set(SRC_${LIB_NAME}
 #
 find_package(OpenSSL REQUIRED)
 
-# find_package(Boost 1.70 REQUIRED COMPONENTS system thread filesystem)
-include_directories(../boost/boost_1_76_0/boost)
-  
+find_package(Boost 1.70 REQUIRED COMPONENTS system filesystem)
+include_directories(${Boost_INCLUDE_DIRS}) 
+
+if (MSVC)
+  add_definitions(/bigobj)
+endif ()
+
 # set up the library we are building
 add_library(${LIB_NAME} STATIC ${HEADERS_${LIB_NAME}} ${SRC_${LIB_NAME}})
 set_target_properties(${LIB_NAME} PROPERTIES LINKER_LANGUAGE CXX)
 
 target_include_directories(${LIB_NAME} PUBLIC .)
+target_include_directories(${LIB_NAME} PUBLIC ${Boost_INCLUDE_DIRS}) 
 
 target_link_libraries(${LIB_NAME}
-    atomic
+    $<$<CXX_COMPILER_ID:GNU>:atomic>
     OpenSSL::SSL 
     OpenSSL::Crypto
 )

@@ -85,7 +85,7 @@ static bool load_server_certificate(boost::asio::ssl::context& ctx, const std::s
     if ( ! std::filesystem::exists(cert_chain_file, ec) || ec /* short circuit*/)
     {
         std::cerr << "BeastWebServer - cert_chain_file does not exist \"" + cert_chain_file + "\"\n";
-        std::cerr << ec;
+        std::cerr << ec << std::endl;
         hadError = true;
     }
 
@@ -93,7 +93,7 @@ static bool load_server_certificate(boost::asio::ssl::context& ctx, const std::s
     if ( ! std::filesystem::exists(private_key_file, ec) || ec /* short circuit*/)
     {
         std::cerr << "BeastWebServer - private_key_file does not exist \"" + private_key_file + "\"\n";
-        std::cerr << ec;
+        std::cerr << ec << std::endl;
         hadError = true;
     }
 
@@ -101,7 +101,7 @@ static bool load_server_certificate(boost::asio::ssl::context& ctx, const std::s
     if ( ! std::filesystem::exists(tmp_dh_file, ec) || ec /* short circuit*/)
     {
         std::cerr << "BeastWebServer - cert_chain_file does not exist \"" + tmp_dh_file + "\"\n";
-        std::cerr << ec;
+        std::cerr << ec << std::endl;
         hadError = true;
     }
 
@@ -110,7 +110,7 @@ static bool load_server_certificate(boost::asio::ssl::context& ctx, const std::s
     ctx.use_certificate_chain_file(cert_chain_file, boost_error);
     if (boost_error)
     {
-        std::cerr << boost_error;
+        std::cerr << boost_error << std::endl;
         hadError = true;
     }
 
@@ -118,7 +118,7 @@ static bool load_server_certificate(boost::asio::ssl::context& ctx, const std::s
     ctx.use_private_key_file(private_key_file, boost::asio::ssl::context::pem, boost_error);
     if (boost_error)
     {
-        std::cerr << boost_error;
+        std::cerr << boost_error << std::endl;
         hadError = true;
     }
 
@@ -126,7 +126,7 @@ static bool load_server_certificate(boost::asio::ssl::context& ctx, const std::s
     ctx.use_tmp_dh_file(tmp_dh_file, boost_error);
     if (boost_error)
     {
-        std::cerr << boost_error;
+        std::cerr << boost_error << std::endl;
         hadError = true;
     }
 

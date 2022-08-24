@@ -55,41 +55,37 @@ size_t shared_state::nSessions()
   return ws_sessions_.size() + wss_sessions_.size() + https_sessions_.size() + https_sessions_.size();
 }
 
-void shared_state::upgrade(plain_websocket_session *ws_session, plain_http_session *http_session)
+void shared_state::upgrade(plain_websocket_session *ws_session)
 {
   std::lock_guard<MutexT> lock(mutex_);
   ws_sessions_.insert(ws_session);
-  // http_sessions_.erase(http_session);
 
   if (callbacks.callbackUpgrade)
     callbacks.callbackUpgrade(ws_session->endpoint);
 }
 
-void shared_state::downgrade(plain_websocket_session *ws_session, plain_http_session *http_session)
+void shared_state::downgrade(plain_websocket_session *ws_session)
 {
   std::lock_guard<MutexT> lock(mutex_);
   ws_sessions_.erase(ws_session);
-  // http_sessions_.insert(http_session);
 
   if (callbacks.callbackDowngrade)
     callbacks.callbackDowngrade(ws_session->endpoint);
 }
 
-void shared_state::upgrade(ssl_websocket_session *wss_session, ssl_http_session *https_session)
+void shared_state::upgrade(ssl_websocket_session *wss_session)
 {
   std::lock_guard<MutexT> lock(mutex_);
   wss_sessions_.insert(wss_session);
-  // https_sessions_.erase(https_session);
 
   if (callbacks.callbackUpgrade)
     callbacks.callbackUpgrade(wss_session->endpoint);
 }
 
-void shared_state::downgrade(ssl_websocket_session *wss_session, ssl_http_session *https_session)
+void shared_state::downgrade(ssl_websocket_session *wss_session)
 {
   std::lock_guard<MutexT> lock(mutex_);
   wss_sessions_.erase(wss_session);
-  // https_sessions_.insert(https_session);
 
   if (callbacks.callbackDowngrade)
     callbacks.callbackDowngrade(wss_session->endpoint);
@@ -141,11 +137,11 @@ void shared_state::leave(ssl_http_session *session)
 
 // Broadcast a message to all websocket client sessions
 void shared_state::
-    sendAsync(const void* msgPtr, size_t msgSize, const CompletionHandlerT &completionHandler, bool force_send, size_t max_queue_size)
+    sendAsync(const void* msgPtr, size_t msgSize, const CompletionHandlerT &completionHandler, bool force_send, size_t max_queue_size, bool to_ws, bool to_tcp)
 {
-  if (nullptr == msgPtr || 0 == msgSize)
-    return;
-
+    // checks for null msgPtr and 0 length are done lower down
+    // if either of those things happen, call the completion handler with an abort token
+    
     bool sent_to_any = false;
 
     // lock mutex here and pool all the different types of sessions we have
@@ -158,24 +154,30 @@ void shared_state::
       std::lock_guard<MutexT> lock(mutex_);
 
       ws_sessionPointerPool.clear();
-      ws_sessionPointerPool.reserve(ws_sessions_.size());
-      for (auto p : ws_sessions_)
-        ws_sessionPointerPool.emplace_back(p->weak_from_this());
-
       wss_sessionPointerPool.clear();
-      wss_sessionPointerPool.reserve(wss_sessions_.size());
-      for (auto p : wss_sessions_)
-        wss_sessionPointerPool.emplace_back(p->weak_from_this());
+      if (to_ws)
+      {
+        ws_sessionPointerPool.reserve(ws_sessions_.size());
+        for (auto p : ws_sessions_)
+          ws_sessionPointerPool.emplace_back(p->weak_from_this());
+
+        wss_sessionPointerPool.reserve(wss_sessions_.size());
+        for (auto p : wss_sessions_)
+          wss_sessionPointerPool.emplace_back(p->weak_from_this());
+      }
 
       http_sessionPointerPool.clear();
-      http_sessionPointerPool.reserve(http_sessions_.size());
-      for (auto p : http_sessions_)
-        http_sessionPointerPool.emplace_back(p->weak_from_this());
-
       https_sessionPointerPool.clear();
-      https_sessionPointerPool.reserve(https_sessions_.size());
-      for (auto p : https_sessions_)
-        https_sessionPointerPool.emplace_back(p->weak_from_this());
+      if (to_tcp)
+      {
+        http_sessionPointerPool.reserve(http_sessions_.size());
+        for (auto p : http_sessions_)
+          http_sessionPointerPool.emplace_back(p->weak_from_this());
+
+        https_sessionPointerPool.reserve(https_sessions_.size());
+        for (auto p : https_sessions_)
+          https_sessionPointerPool.emplace_back(p->weak_from_this());
+      }
     }
 
     // WS
@@ -227,9 +229,9 @@ void shared_state::
 // Broadcast a message to all websocket client sessions
 void shared_state::
     sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, const void* msgPtr, size_t msgSize, const CompletionHandlerT &completionHandler, bool force_send, size_t max_queue_size)
-{
-  if (nullptr == msgPtr || 0 == msgSize)
-    return;
+  {
+    // checks for null msgPtr and 0 length are done lower down
+    // if either of those things happen, call the completion handler with an abort token
 
     bool sent_to_any = false;
 
@@ -243,24 +245,28 @@ void shared_state::
       std::lock_guard<MutexT> lock(mutex_);
 
       ws_sessionPointerPool.clear();
+      wss_sessionPointerPool.clear();
+
       ws_sessionPointerPool.reserve(ws_sessions_.size());
       for (auto p : ws_sessions_)
         ws_sessionPointerPool.emplace_back(p->weak_from_this());
 
-      wss_sessionPointerPool.clear();
       wss_sessionPointerPool.reserve(wss_sessions_.size());
       for (auto p : wss_sessions_)
         wss_sessionPointerPool.emplace_back(p->weak_from_this());
+      
 
       http_sessionPointerPool.clear();
+      https_sessionPointerPool.clear();
+      
       http_sessionPointerPool.reserve(http_sessions_.size());
       for (auto p : http_sessions_)
         http_sessionPointerPool.emplace_back(p->weak_from_this());
 
-      https_sessionPointerPool.clear();
       https_sessionPointerPool.reserve(https_sessions_.size());
       for (auto p : https_sessions_)
         https_sessionPointerPool.emplace_back(p->weak_from_this());
+      
     }
 
 
@@ -328,11 +334,11 @@ void shared_state::
 }
 
 
-void shared_state::sendAsync(const std::string &str, bool force_send, size_t max_queue_size)
+void shared_state::sendAsync(const std::string &str, bool force_send, size_t max_queue_size, bool to_ws, bool to_tcp)
 {
     std::shared_ptr<std::string> strPtr = std::make_shared<std::string>(str);
 
-    sendAsync((void*)(strPtr->data()), strPtr->length(), [strPtr](beast::error_code, size_t, const endpointT &){}, force_send, max_queue_size);
+    sendAsync((void*)(strPtr->data()), strPtr->length(), [strPtr](beast::error_code, size_t, const endpointT &){}, force_send, max_queue_size, to_ws, to_tcp);
 }
 
 void shared_state::sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, const std::string &str, bool force_send, size_t max_queue_size)

@@ -137,15 +137,13 @@ class plain_websocket_session
     websocket::stream<beast::tcp_stream> ws_;
 
 public:
-    plain_http_session *parent_http_session; // pointer to parent http session
 
     // Create the session
     explicit
     plain_websocket_session(
         beast::tcp_stream&& stream,
         std::shared_ptr<shared_state> const& state,
-        const tcp::endpoint &endpoint,
-        plain_http_session *http_session_in
+        const tcp::endpoint &endpoint
         );
 
     explicit
@@ -178,15 +176,13 @@ class ssl_websocket_session
     websocket::stream<beast::ssl_stream<beast::tcp_stream>> ws_;
 
 public:
-    ssl_http_session *parent_http_session; // pointer to parent https session
 
     // Create the ssl_websocket_session
     explicit
     ssl_websocket_session(
         beast::ssl_stream<beast::tcp_stream>&& stream,
         std::shared_ptr<shared_state> const& state,
-        const tcp::endpoint &endpoint,
-        ssl_http_session *https_session_in);
+        const tcp::endpoint &endpoint);
 
     explicit
     ssl_websocket_session(
@@ -215,11 +211,11 @@ static void
 make_websocket_session_server(
     beast::tcp_stream stream,
         std::shared_ptr<shared_state> const& state,
-        const tcp::endpoint &endpoint, plain_http_session *http_session,
+        const tcp::endpoint &endpoint,
     http::request<Body, http::basic_fields<Allocator>> req)
 {
     std::make_shared<plain_websocket_session>(
-        std::move(stream), state, endpoint, http_session)->runServer(std::move(req));
+        std::move(stream), state, endpoint)->runServer(std::move(req));
 }
 
 template<class Body, class Allocator>
@@ -227,11 +223,11 @@ static void
 make_websocket_session_server(
     beast::ssl_stream<beast::tcp_stream> stream,
         std::shared_ptr<shared_state> const& state,
-        const tcp::endpoint &endpoint, ssl_http_session *https_session,
+        const tcp::endpoint &endpoint,
     http::request<Body, http::basic_fields<Allocator>> req)
 {
     std::make_shared<ssl_websocket_session>(
-        std::move(stream), state, endpoint, https_session)->runServer(std::move(req));
+        std::move(stream), state, endpoint)->runServer(std::move(req));
 }
 
 

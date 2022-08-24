@@ -87,7 +87,7 @@ namespace BeastNetworking
             // Create a websocket session, transferring ownership
             // of both the socket and the HTTP request.
             return make_websocket_session_server(
-                derived().release_stream(), state_, endpoint, &derived(),
+                derived().release_stream(), state_, endpoint,
                 parser_->release());
         }
 
@@ -175,6 +175,7 @@ namespace BeastNetworking
             return;
 
         bool may_send = true;//rate_enforcer.should_send(msgSize) || force_send;
+        may_send &= (msgPtr!=nullptr && msgSize>0);
 
         if ( may_send )
         {
@@ -217,6 +218,7 @@ namespace BeastNetworking
             bool force = std::get<3>(next);
 
             bool may_send = true;//rate_enforcer.should_send(msgSize) || force;
+            may_send &= (msgPtr!=nullptr && msgSize>0);
 
             if (may_send)
             {

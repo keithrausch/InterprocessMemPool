@@ -108,22 +108,22 @@ public:
 
   size_t nSessions();
 
-  void upgrade(plain_websocket_session *ws_session, plain_http_session *http_session);
-  void downgrade(plain_websocket_session *ws_session, plain_http_session *http_session);
-  void upgrade(ssl_websocket_session *wss_session, ssl_http_session *https_session);
-  void downgrade(ssl_websocket_session *wss_session, ssl_http_session *https_session);
+  void upgrade(plain_websocket_session *ws_session);
+  void downgrade(plain_websocket_session *ws_session);
+  void upgrade(ssl_websocket_session *wss_session);
+  void downgrade(ssl_websocket_session *wss_session);
   void join(plain_http_session *session);
   void leave(plain_http_session *session);
   void join(ssl_http_session *session);
   void leave(ssl_http_session *session);
-  void sendAsync(const void * msgPtr, size_t msgSize, const CompletionHandlerT &completionHandler = CompletionHandlerT(), bool force_send=false, size_t max_queue_size=std::numeric_limits<size_t>::max());
-  void sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, const void * msgPtr, size_t msgSize, const CompletionHandlerT &completionHandler = CompletionHandlerT(), bool force_send=false, size_t max_queue_size=std::numeric_limits<size_t>::max());
   void on_ws_read(const boost::asio::ip::tcp::endpoint &endpoint, const void * msgPtr, size_t msgSize);
   void on_http_read(const boost::asio::ip::tcp::endpoint &endpoint, const void * msgPtr, size_t msgSize);
   void on_error(const boost::asio::ip::tcp::endpoint &endpoint, beast::error_code ec);
 
 
-  void sendAsync(const std::string &str, bool force_send=false, size_t max_queue_size=std::numeric_limits<size_t>::max());
+  void sendAsync(const void * msgPtr, size_t msgSize, const CompletionHandlerT &completionHandler = CompletionHandlerT(), bool force_send=false, size_t max_queue_size=std::numeric_limits<size_t>::max(), bool to_ws=true, bool to_tcp=false);
+  void sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, const void * msgPtr, size_t msgSize, const CompletionHandlerT &completionHandler = CompletionHandlerT(), bool force_send=false, size_t max_queue_size=std::numeric_limits<size_t>::max());
+  void sendAsync(const std::string &str, bool force_send=false, size_t max_queue_size=std::numeric_limits<size_t>::max(), bool to_ws=true, bool to_tcp=false);
   void sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, const std::string &str, bool force_send=false, size_t max_queue_size=std::numeric_limits<size_t>::max());
 };
 

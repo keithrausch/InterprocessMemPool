@@ -33,7 +33,7 @@ struct MultiClientSender
 
     shared_state::Callbacks callbacks;
 
-    callbacks.callbackRead = [](const tcp::endpoint &endpoint, const void *msgPtr, size_t msgSize) {
+    callbacks.callbackWSRead = [](const tcp::endpoint &endpoint, const void *msgPtr, size_t msgSize) {
       std::stringstream ss;
       ss << endpoint;
       std::string endpointString = ss.str();
@@ -48,7 +48,7 @@ struct MultiClientSender
 
     if (args.verbose)
     {
-      callbacks.callbackAccept = [our_endpoint](const tcp::endpoint &endpoint) { std::cout << "InterprocessMemPool::MultiClientSender::on_accept() - our endpoint: "<< our_endpoint <<", accepting endpoint: " << endpoint << std::endl; };
+      callbacks.callbackUpgrade = [our_endpoint](const tcp::endpoint &endpoint) { std::cout << "InterprocessMemPool::MultiClientSender::on_upgrade() - our endpoint: "<< our_endpoint <<", accepting endpoint: " << endpoint << std::endl; };
       callbacks.callbackClose = [our_endpoint](const tcp::endpoint &endpoint) { std::cout << "InterprocessMemPool::MultiClientSender::on_close() - our endpoint: "<< our_endpoint<< ", closing endpoint: " << endpoint << std::endl; };
     }
 

@@ -66,7 +66,7 @@ template<class Derived>
             return on_error(ec);
 
         // Add this session to the list of active sessions
-        state_->join(&derived());
+        state_->upgrade(&derived(), derived().parent_http_session);
 
         // Read a message
         derived().ws().async_read(
@@ -83,7 +83,7 @@ template<class Derived>
             return on_error(ec);
 
         // Send to all connections
-        state_->on_read(endpoint, buffer_.data().data(), bytes_transferred);
+        state_->on_ws_read(endpoint, buffer_.data().data(), bytes_transferred);
 
         // Clear the buffer
         buffer_.consume(buffer_.size());
@@ -258,7 +258,7 @@ template<class Derived>
         }
 
         // Remove this session from the list of active sessions
-        state_->leave(&derived());
+        state_->downgrade(&derived(), derived().parent_http_session);
     }
 
 
@@ -303,9 +303,10 @@ template class websocket_session<ssl_websocket_session>;
     plain_websocket_session::plain_websocket_session(
         beast::tcp_stream&& stream,
         std::shared_ptr<shared_state> const& state,
-        const tcp::endpoint &endpoint
+        const tcp::endpoint &endpoint,
+        plain_http_session *http_session_in
         )
-        :  websocket_session<plain_websocket_session>(state, endpoint), ws_(std::move(stream))
+        :  websocket_session<plain_websocket_session>(state, endpoint), ws_(std::move(stream)), parent_http_session(http_session_in)
     {
     }
 
@@ -316,7 +317,7 @@ template class websocket_session<ssl_websocket_session>;
 
         const std::string &serverAddress,
         unsigned short serverPort)
-        :  websocket_session<plain_websocket_session>(ioc, state, serverAddress, serverPort), ws_(std::move(stream))
+        :  websocket_session<plain_websocket_session>(ioc, state, serverAddress, serverPort), ws_(std::move(stream)), parent_http_session(nullptr)
     {
     }
 
@@ -378,8 +379,9 @@ template class websocket_session<ssl_websocket_session>;
 ssl_websocket_session::ssl_websocket_session(
         beast::ssl_stream<beast::tcp_stream>&& stream,
         std::shared_ptr<shared_state> const& state,
-        const tcp::endpoint &endpoint)
-        : websocket_session<ssl_websocket_session>(state, endpoint), ws_(std::move(stream))
+        const tcp::endpoint &endpoint,
+        ssl_http_session *https_session_in)
+        : websocket_session<ssl_websocket_session>(state, endpoint), ws_(std::move(stream)), parent_http_session(https_session_in)
     {
     }
 
@@ -390,7 +392,7 @@ ssl_websocket_session::ssl_websocket_session(
         std::shared_ptr<shared_state> const& state,
         const std::string &serverAddress,
         unsigned short serverPort)
-        : websocket_session<ssl_websocket_session>(ioc, state, serverAddress, serverPort), ws_(std::move(stream))
+        : websocket_session<ssl_websocket_session>(ioc, state, serverAddress, serverPort), ws_(std::move(stream)), parent_http_session(nullptr)
     {
     }
 

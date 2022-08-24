@@ -111,7 +111,7 @@ int main(int argc, char *argv[])
     }
     catch (const std::exception &e)
     {
-      std::cerr << "CHILD  ENCOUNTERED AN ERROR: " << e.what() << '\n';
+      std::cerr << "CHILD ENCOUNTERED AN ERROR: " << e.what() << '\n';
     }
   }
 

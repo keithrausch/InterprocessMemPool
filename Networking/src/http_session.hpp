@@ -120,13 +120,17 @@ void handle_request( beast::string_view doc_root, http::request<Body, http::basi
     // Make sure we can handle the method
     if( req.method() != http::verb::get &&
         req.method() != http::verb::head)
+        {
         return send(bad_request("Unknown HTTP-method"));
+        }
 
     // Request path must be absolute and not contain "..".
     if( req.target().empty() ||
         req.target()[0] != '/' ||
         req.target().find("..") != beast::string_view::npos)
+        {
         return send(bad_request("Illegal request-target"));
+        }
 
     // Build the path to the requested file
     std::string path = path_cat(doc_root, req.target());
@@ -277,9 +281,8 @@ class http_session
     };
 
     // std::shared_ptr<std::string const> doc_root_;
-    std::shared_ptr<shared_state> state_;
-    queue queue_;
-    tcp::endpoint remote_endpoint;
+    queue queue_; // part of the example, for get/post/etc
+    std::deque<shared_state::SpanAndHandlerT> send_queue_; // no mutex needed, only ever modified inside handlers, which are in a strand
 
     // The parser is stored in an optional container so we can
     // construct it from scratch it at the beginning of each new message.
@@ -287,14 +290,17 @@ class http_session
 
 protected:
     beast::flat_buffer buffer_;
+    std::shared_ptr<shared_state> state_;
 
 public:
+    tcp::endpoint endpoint;
+
     // Construct the session
     http_session(
         beast::flat_buffer buffer,
         std::shared_ptr<shared_state> const& state,
         // std::shared_ptr<std::string const> const& doc_root,
-        tcp::endpoint remote_endpoint_in
+        tcp::endpoint endpoint_in
         );
 
     void do_read();
@@ -302,6 +308,14 @@ public:
     void on_read(beast::error_code ec, std::size_t bytes_transferred);
 
     void on_write(bool close, beast::error_code ec, std::size_t bytes_transferred);
+
+    void sendAsync(const void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT completionHandler, bool force_send, size_t max_queue_size );
+
+    void on_send(const void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT &&completionHandler, bool force_send=false, size_t max_queue_size=std::numeric_limits<size_t>::max());
+
+    void on_write2( beast::error_code ec, std::size_t bytes_transferred);
+
+    void on_error(beast::error_code ec);
 };
 
 //------------------------------------------------------------------------------
@@ -322,11 +336,14 @@ public:
         //std::shared_ptr<std::string const> const& doc_root
         );
 
+    ~plain_http_session();
+
     // Start the session
     void run();
 
     // Called by the base class
     beast::tcp_stream& stream();
+    boost::asio::ip::tcp::socket& socket();
 
     // Called by the base class
     beast::tcp_stream release_stream();
@@ -354,11 +371,14 @@ public:
         //std::shared_ptr<std::string const> const& doc_root
         );
 
+    ~ssl_http_session();
+
     // Start the session
     void run();
 
     // Called by the base class
     beast::ssl_stream<beast::tcp_stream>& stream();
+    boost::asio::ip::tcp::socket& socket();
 
     // Called by the base class
     beast::ssl_stream<beast::tcp_stream> release_stream();

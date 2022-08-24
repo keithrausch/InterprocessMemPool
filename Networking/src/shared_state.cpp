@@ -16,6 +16,7 @@
 
 #include "shared_state.hpp"
 #include "websocket_session.hpp"
+#include "http_session.hpp"
 
 namespace BeastNetworking
 {
@@ -51,45 +52,91 @@ shared_state::shared_state(std::string doc_root, const Callbacks &callbacks_in)
 size_t shared_state::nSessions()
 {
   std::lock_guard<MutexT> lock(mutex_);
-  return sessions_.size();
+  return ws_sessions_.size() + wss_sessions_.size() + https_sessions_.size() + https_sessions_.size();
 }
 
-void shared_state::join(plain_websocket_session *session)
+void shared_state::upgrade(plain_websocket_session *ws_session, plain_http_session *http_session)
 {
   std::lock_guard<MutexT> lock(mutex_);
-  sessions_.insert(session);
+  ws_sessions_.insert(ws_session);
+  // http_sessions_.erase(http_session);
+
+  if (callbacks.callbackUpgrade)
+    callbacks.callbackUpgrade(ws_session->endpoint);
+}
+
+void shared_state::downgrade(plain_websocket_session *ws_session, plain_http_session *http_session)
+{
+  std::lock_guard<MutexT> lock(mutex_);
+  ws_sessions_.erase(ws_session);
+  // http_sessions_.insert(http_session);
+
+  if (callbacks.callbackDowngrade)
+    callbacks.callbackDowngrade(ws_session->endpoint);
+}
+
+void shared_state::upgrade(ssl_websocket_session *wss_session, ssl_http_session *https_session)
+{
+  std::lock_guard<MutexT> lock(mutex_);
+  wss_sessions_.insert(wss_session);
+  // https_sessions_.erase(https_session);
+
+  if (callbacks.callbackUpgrade)
+    callbacks.callbackUpgrade(wss_session->endpoint);
+}
+
+void shared_state::downgrade(ssl_websocket_session *wss_session, ssl_http_session *https_session)
+{
+  std::lock_guard<MutexT> lock(mutex_);
+  wss_sessions_.erase(wss_session);
+  // https_sessions_.insert(https_session);
+
+  if (callbacks.callbackDowngrade)
+    callbacks.callbackDowngrade(wss_session->endpoint);
+}
+
+
+
+void shared_state::join(plain_http_session *session)
+{
+  std::lock_guard<MutexT> lock(mutex_);
+  http_sessions_.insert(session);
 
   if (callbacks.callbackAccept)
     callbacks.callbackAccept(session->endpoint);
 }
 
-void shared_state::leave(plain_websocket_session *session)
+void shared_state::leave(plain_http_session *session)
 {
   std::lock_guard<MutexT> lock(mutex_);
-  sessions_.erase(session);
+  http_sessions_.erase(session);
+
+  if (callbacks.callbackClose)
+    callbacks.callbackClose(session->endpoint);
+}
+
+void shared_state::join(ssl_http_session *session)
+{
+  std::lock_guard<MutexT> lock(mutex_);
+  https_sessions_.insert(session);
+
+  if (callbacks.callbackAccept)
+    callbacks.callbackAccept(session->endpoint);
+}
+
+void shared_state::leave(ssl_http_session *session)
+{
+  std::lock_guard<MutexT> lock(mutex_);
+  https_sessions_.erase(session);
 
   if (callbacks.callbackClose)
     callbacks.callbackClose(session->endpoint);
 }
 
 
-void shared_state::join(ssl_websocket_session *session)
-{
-  std::lock_guard<MutexT> lock(mutex_);
-  sessionsSSL_.insert(session);
 
-  if (callbacks.callbackAccept)
-    callbacks.callbackAccept(session->endpoint);
-}
 
-void shared_state::leave(ssl_websocket_session *session)
-{
-  std::lock_guard<MutexT> lock(mutex_);
-  sessionsSSL_.erase(session);
 
-  if (callbacks.callbackClose)
-    callbacks.callbackClose(session->endpoint);
-}
 
 
 // Broadcast a message to all websocket client sessions
@@ -101,57 +148,73 @@ void shared_state::
 
     bool sent_to_any = false;
 
-    {
-        // Make a local list of all the weak pointers representing
-        // the sessions, so we can do the actual sending without
-        // holding the mutex:
-        {
-            std::lock_guard<MutexT> lock(mutex_);
-            sessionPointerPool.clear();
-            sessionPointerPool.reserve(sessions_.size());
-            for (auto p : sessions_)
-            {
-              sessionPointerPool.emplace_back(p->weak_from_this());
-            }
-        }
+    // lock mutex here and pool all the different types of sessions we have
+    // then unlock the mutex and send
 
-        // For each session in our local list, try to acquire a strong
-        // pointer. If successful, then send the message on that session.
-        for (auto const &wp : sessionPointerPool)
+    // Make a local list of all the weak pointers representing
+    // the sessions, so we can do the actual sending without
+    // holding the mutex:
+    {
+      std::lock_guard<MutexT> lock(mutex_);
+
+      ws_sessionPointerPool.clear();
+      ws_sessionPointerPool.reserve(ws_sessions_.size());
+      for (auto p : ws_sessions_)
+        ws_sessionPointerPool.emplace_back(p->weak_from_this());
+
+      wss_sessionPointerPool.clear();
+      wss_sessionPointerPool.reserve(wss_sessions_.size());
+      for (auto p : wss_sessions_)
+        wss_sessionPointerPool.emplace_back(p->weak_from_this());
+
+      http_sessionPointerPool.clear();
+      http_sessionPointerPool.reserve(http_sessions_.size());
+      for (auto p : http_sessions_)
+        http_sessionPointerPool.emplace_back(p->weak_from_this());
+
+      https_sessionPointerPool.clear();
+      https_sessionPointerPool.reserve(https_sessions_.size());
+      for (auto p : https_sessions_)
+        https_sessionPointerPool.emplace_back(p->weak_from_this());
+    }
+
+    // WS
+    for (auto const &wp : ws_sessionPointerPool)
+    {
+        if (auto sp = wp.lock())
         {
-            if (auto sp = wp.lock())
-            {
-              sp->sendAsync(msgPtr, msgSize, completionHandler, force_send, max_queue_size);
-              sent_to_any = true;
-            }
+          sp->sendAsync(msgPtr, msgSize, completionHandler, force_send, max_queue_size);
+          sent_to_any = true;
         }
     }
 
-    // NOW DO SSL
-
+    // WSS
+    for (auto const &wp : wss_sessionPointerPool)
     {
-        // Make a local list of all the weak pointers representing
-        // the sessions, so we can do the actual sending without
-        // holding the mutex:
+        if (auto sp = wp.lock())
         {
-            std::lock_guard<MutexT> lock(mutex_);
-            sessionPointerPoolSSL.clear();
-            sessionPointerPoolSSL.reserve(sessionsSSL_.size());
-            for (auto p : sessionsSSL_)
-            {
-              sessionPointerPoolSSL.emplace_back(p->weak_from_this());
-            }
+          sp->sendAsync(msgPtr, msgSize, completionHandler, force_send, max_queue_size);
+          sent_to_any = true;
         }
+    }
 
-        // For each session in our local list, try to acquire a strong
-        // pointer. If successful, then send the message on that session.
-        for (auto const &wp : sessionPointerPoolSSL)
+    // HTTP
+    for (auto const &wp : http_sessionPointerPool)
+    {
+        if (auto sp = wp.lock())
         {
-            if (auto sp = wp.lock())
-            {
-              sp->sendAsync(msgPtr, msgSize, completionHandler, force_send, max_queue_size);
-              sent_to_any = true;
-            }
+          sp->sendAsync(msgPtr, msgSize, completionHandler, force_send, max_queue_size);
+          sent_to_any = true;
+        }
+    }
+
+    // HTTPS
+    for (auto const &wp : https_sessionPointerPool)
+    {
+        if (auto sp = wp.lock())
+        {
+          sp->sendAsync(msgPtr, msgSize, completionHandler, force_send, max_queue_size);
+          sent_to_any = true;
         }
     }
 
@@ -170,65 +233,93 @@ void shared_state::
 
     bool sent_to_any = false;
 
-    {
-        // Make a local list of all the weak pointers representing
-        // the sessions, so we can do the actual sending without
-        // holding the mutex:
-        {
-          std::lock_guard<MutexT> lock(mutex_);
-          sessionPointerPool.clear();
-          sessionPointerPool.reserve(sessions_.size());
-          for (auto p : sessions_)
-          {
-            sessionPointerPool.emplace_back(p->weak_from_this());
-          }
-        }
+    // lock mutex here and pool all the different types of sessions we have
+    // then unlock the mutex and send
 
-        // For each session in our local list, try to acquire a strong
-        // pointer. If successful, then send the message on that session.
-        for (auto const &wp : sessionPointerPool)
-        {
-          if (auto sp = wp.lock())
-          {
-            if (sp->endpoint == endpoint)
-            {
-                sp->sendAsync(msgPtr, msgSize, completionHandler, force_send, max_queue_size);
-                sent_to_any = true;
-            }
-          }
-        }
+    // Make a local list of all the weak pointers representing
+    // the sessions, so we can do the actual sending without
+    // holding the mutex:
+    {
+      std::lock_guard<MutexT> lock(mutex_);
+
+      ws_sessionPointerPool.clear();
+      ws_sessionPointerPool.reserve(ws_sessions_.size());
+      for (auto p : ws_sessions_)
+        ws_sessionPointerPool.emplace_back(p->weak_from_this());
+
+      wss_sessionPointerPool.clear();
+      wss_sessionPointerPool.reserve(wss_sessions_.size());
+      for (auto p : wss_sessions_)
+        wss_sessionPointerPool.emplace_back(p->weak_from_this());
+
+      http_sessionPointerPool.clear();
+      http_sessionPointerPool.reserve(http_sessions_.size());
+      for (auto p : http_sessions_)
+        http_sessionPointerPool.emplace_back(p->weak_from_this());
+
+      https_sessionPointerPool.clear();
+      https_sessionPointerPool.reserve(https_sessions_.size());
+      for (auto p : https_sessions_)
+        https_sessionPointerPool.emplace_back(p->weak_from_this());
     }
 
-    // NOW DO SSL
 
+    // For each session in our local list, try to acquire a strong
+    // pointer. If successful, then send the message on that session.
+
+    // WS
+    for (auto const &wp : ws_sessionPointerPool)
     {
-        // Make a local list of all the weak pointers representing
-        // the sessions, so we can do the actual sending without
-        // holding the mutex:
+      if (auto sp = wp.lock())
+      {
+        if (sp->endpoint == endpoint)
         {
-          std::lock_guard<MutexT> lock(mutex_);
-          sessionPointerPoolSSL.clear();
-          sessionPointerPoolSSL.reserve(sessionsSSL_.size());
-          for (auto p : sessionsSSL_)
-          {
-            sessionPointerPoolSSL.emplace_back(p->weak_from_this());
-          }
+            sp->sendAsync(msgPtr, msgSize, completionHandler, force_send, max_queue_size);
+            sent_to_any = true;
         }
-
-        // For each session in our local list, try to acquire a strong
-        // pointer. If successful, then send the message on that session.
-        for (auto const &wp : sessionPointerPoolSSL)
-        {
-          if (auto sp = wp.lock())
-          {
-            if (sp->endpoint == endpoint)
-            {
-                sp->sendAsync(msgPtr, msgSize, completionHandler, force_send, max_queue_size);
-            }
-          }
-        }
+      }
     }
 
+
+    // WSS
+    for (auto const &wp : wss_sessionPointerPool)
+    {
+      if (auto sp = wp.lock())
+      {
+        if (sp->endpoint == endpoint)
+        {
+            sp->sendAsync(msgPtr, msgSize, completionHandler, force_send, max_queue_size);
+            sent_to_any = true;
+        }
+      }
+    }
+
+    // HTTP
+    for (auto const &wp : http_sessionPointerPool)
+    {
+      if (auto sp = wp.lock())
+      {
+        if (sp->endpoint == endpoint)
+        {
+            sp->sendAsync(msgPtr, msgSize, completionHandler, force_send, max_queue_size);
+            sent_to_any = true;
+        }
+      }
+    }
+    
+
+    // HTTPS
+    for (auto const &wp : https_sessionPointerPool)
+    {
+      if (auto sp = wp.lock())
+      {
+        if (sp->endpoint == endpoint)
+        {
+            sp->sendAsync(msgPtr, msgSize, completionHandler, force_send, max_queue_size);
+            sent_to_any = true;
+        }
+      }
+    }
 
   if ( ! sent_to_any && completionHandler)
   {
@@ -250,10 +341,16 @@ void shared_state::sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, con
     sendAsync(endpoint, (void*)(strPtr->data()), strPtr->length(), [strPtr](beast::error_code, size_t, const endpointT &){}, force_send, max_queue_size);
 }
 
-void shared_state::on_read(const tcp::endpoint &endpoint, const void *msgPtr, size_t msgSize)
+void shared_state::on_ws_read(const tcp::endpoint &endpoint, const void *msgPtr, size_t msgSize)
 {
-  if (callbacks.callbackRead)
-    callbacks.callbackRead(endpoint, msgPtr, msgSize);
+  if (callbacks.callbackWSRead)
+    callbacks.callbackWSRead(endpoint, msgPtr, msgSize);
+}
+
+void shared_state::on_http_read(const tcp::endpoint &endpoint, const void *msgPtr, size_t msgSize)
+{
+  if (callbacks.callbackHTTPRead)
+    callbacks.callbackHTTPRead(endpoint, msgPtr, msgSize);
 }
 
 void shared_state::on_error(const tcp::endpoint &endpoint, beast::error_code ec)

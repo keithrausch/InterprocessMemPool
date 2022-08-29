@@ -207,10 +207,10 @@ template<class Derived>
     // https://stackoverflow.com/questions/7730260/binary-vs-string-transfer-over-a-stream
     // means bytes sent are bytes received, no UTF-8 text encode/decode
 
-    if (state_->callbacks.callbackAccept)
-    {
-        state_->callbacks.callbackAccept(endpoint);
-    }
+    // if (state_->callbacks.callbackAccept)
+    // {
+    //     state_->callbacks.callbackAccept(endpoint);
+    // }
 
     // Send the message
     derived().ws().async_read(

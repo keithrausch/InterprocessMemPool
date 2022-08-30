@@ -365,4 +365,29 @@ void shared_state::on_error(const tcp::endpoint &endpoint, beast::error_code ec)
     callbacks.callbackError(endpoint, ec);
 }
 
+std::vector<boost::asio::ip::tcp::endpoint> shared_state::get_endpoints()
+{
+  std::vector<boost::asio::ip::tcp::endpoint> ret;
+
+    std::lock_guard<MutexT> lock(mutex_);
+
+    size_t nSessions = ws_sessions_.size() + wss_sessions_.size() + http_sessions_.size() + https_sessions_.size();
+
+    ret.reserve(nSessions);
+
+    for (auto p : ws_sessions_)
+      ret.emplace_back(p->endpoint);
+
+    for (auto p : wss_sessions_)
+      ret.emplace_back(p->endpoint);
+    
+    for (auto p : http_sessions_)
+      ret.emplace_back(p->endpoint);
+
+    for (auto p : https_sessions_)
+      ret.emplace_back(p->endpoint);
+      
+    return ret;
+}
+
 } // namespace

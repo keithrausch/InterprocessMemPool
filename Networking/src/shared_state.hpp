@@ -125,6 +125,8 @@ public:
   void sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, const void * msgPtr, size_t msgSize, const CompletionHandlerT &completionHandler = CompletionHandlerT(), bool force_send=false, size_t max_queue_size=std::numeric_limits<size_t>::max());
   void sendAsync(const std::string &str, bool force_send=false, size_t max_queue_size=std::numeric_limits<size_t>::max(), bool to_ws=true, bool to_tcp=false);
   void sendAsync(const boost::asio::ip::tcp::endpoint &endpoint, const std::string &str, bool force_send=false, size_t max_queue_size=std::numeric_limits<size_t>::max());
+
+  std::vector<boost::asio::ip::tcp::endpoint> get_endpoints();
 };
 
 } // namespace

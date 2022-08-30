@@ -48,8 +48,9 @@ struct MultiClientSender
 
     if (args.verbose)
     {
-      callbacks.callbackUpgrade = [our_endpoint](const tcp::endpoint &endpoint) { std::cout << "InterprocessMemPool::MultiClientSender::on_upgrade() - our endpoint: "<< our_endpoint <<", accepting endpoint: " << endpoint << std::endl; };
-      callbacks.callbackClose = [our_endpoint](const tcp::endpoint &endpoint) { std::cout << "InterprocessMemPool::MultiClientSender::on_close() - our endpoint: "<< our_endpoint<< ", closing endpoint: " << endpoint << std::endl; };
+      auto to_string = [](const tcp::endpoint &endpoint){ return endpoint.address().to_string() + ":" + std::to_string(endpoint.port());};
+      callbacks.callbackUpgrade = [our_endpoint, to_string](const tcp::endpoint &endpoint) { std::cout << "InterprocessMemPool::MultiClientSender::on_upgrade() - our endpoint: " + to_string(our_endpoint) +", accepting endpoint: " + to_string(endpoint) + "\n"; };
+      callbacks.callbackClose = [our_endpoint, to_string](const tcp::endpoint &endpoint) { std::cout << "InterprocessMemPool::MultiClientSender::on_close() - our endpoint: " + to_string(our_endpoint) + ", closing endpoint: " + to_string(endpoint) + "\n"; };
     }
 
     sharedState = std::make_shared<shared_state>(callbacks);

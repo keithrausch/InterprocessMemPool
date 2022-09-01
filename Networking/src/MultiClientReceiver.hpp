@@ -24,12 +24,13 @@ class MultiClientReceiver : public std::enable_shared_from_this<MultiClientRecei
   struct SenderCharacteristics
   {
     std::string topic;
-    unsigned short port;
+    unsigned short port_insecure;
+    unsigned short port_secure;
     std::uint_fast64_t uniqueHandleID;
     uint16_t endianness;
     int64_t time; // not all that precise. this isnt ntp afterall
 
-    SenderCharacteristics() : topic(), port(0), uniqueHandleID(0), endianness(0), time(0)
+    SenderCharacteristics() : topic(), port_insecure(0), port_secure(0), uniqueHandleID(0), endianness(0), time(0)
     {
     }
 
@@ -44,9 +45,13 @@ class MultiClientReceiver : public std::enable_shared_from_this<MultiClientRecei
       topic = (matches.size() == 2) ? std::string(matches[1]) : std::string("");
       hadError |= matches.size() != 2; // THIS IS AN ERROR CONDITION
 
-      // port
-      std::regex_search(str, matches, std::regex(R"delim(port:(\d+),)delim"));
-      port = (unsigned short)(matches.size() == 2) ? std::stoull(matches[1]) : 0;
+      // port (insecure)
+      std::regex_search(str, matches, std::regex(R"delim(port_insecure:(\d+),)delim"));
+      port_insecure = (unsigned short)(matches.size() == 2) ? std::stoull(matches[1]) : -1;
+
+      // port (secure)
+      std::regex_search(str, matches, std::regex(R"delim(port_secure:(\d+),)delim"));
+      port_secure = (unsigned short)(matches.size() == 2) ? std::stoull(matches[1]) : -1;
 
       // uniqueHandleID
       std::regex_search(str, matches, std::regex(R"delim(id:(\d+),)delim"));
@@ -91,12 +96,6 @@ class MultiClientReceiver : public std::enable_shared_from_this<MultiClientRecei
         return created_client; // this session is still alive and kicking, leave it
 
       // this client does not already exist, we get to create a new one
-      // client = std::make_shared<WebSocketSessionClient>(io_context,
-      //                                         ssl_context,
-      //                                         state,
-      //                                         serverEndpoint.address().to_string(),
-      //                                         serverEndpoint.port(),
-      //                                         args.useSSL);
       client = BeastNetworking::make_websocket_session_client(io_context, 
                                                               ssl_context, 
                                                               state, 
@@ -122,12 +121,6 @@ class MultiClientReceiver : public std::enable_shared_from_this<MultiClientRecei
         return created_client; // this session is still alive and kicking, leave it
 
       // this client does not already exist, we get to create a new one
-      // client = std::make_shared<plain_websocket_session>(io_context,
-      //                                         ssl_context,
-      //                                         state,
-      //                                         serverEndpoint.address().to_string(),
-      //                                         serverEndpoint.port(),
-      //                                         args.useSSL);
       client = BeastNetworking::make_websocket_session_client(io_context, 
                                                               state, 
                                                               serverEndpoint.address().to_string(),
@@ -161,12 +154,31 @@ class MultiClientReceiver : public std::enable_shared_from_this<MultiClientRecei
     SenderCharacteristics characteristics;
     bool hadError = characteristics.Parse(msg);
 
+    // default to secure port if available, else fall back to insecure
+    unsigned short port_to_use = 0;
+    if (args.useSSL)
+    {
+      if (characteristics.port_secure > 0)
+      {
+        port_to_use = characteristics.port_secure;
+      }
+    }
+    else
+    {
+      if (characteristics.port_insecure > 0)
+      {
+        port_to_use = characteristics.port_insecure;
+      }
+    }
+
+    hadError |= (port_to_use == 0);
+
     if (hadError)
       return;
 
     auto topic = characteristics.topic;
     // auto serverEndpoint = characteristics.claimedServerAddress;
-    auto serverEndpoint = boost::asio::ip::tcp::endpoint(endpoint.address(), characteristics.port);
+    auto serverEndpoint = boost::asio::ip::tcp::endpoint(endpoint.address(), port_to_use);
     if (args.verbose)
       std::cout << "delta time between software send & receive (ms)" << time_ms - characteristics.time << std::endl;
 

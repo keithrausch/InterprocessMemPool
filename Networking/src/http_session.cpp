@@ -177,7 +177,7 @@ namespace BeastNetworking
         bool may_send = true;//rate_enforcer.should_send(msgSize) || force_send;
         may_send &= (msgPtr!=nullptr && msgSize>0);
 
-        if ( may_send )
+        if ( may_send  && queue_.size() == 0)
         {
             // We are not currently writing, so send this immediately
             derived().socket().async_send(
@@ -220,7 +220,7 @@ namespace BeastNetworking
             bool may_send = true;//rate_enforcer.should_send(msgSize) || force;
             may_send &= (msgPtr!=nullptr && msgSize>0);
 
-            if (may_send)
+            if (may_send && queue_.size() == 0)
             {
                 derived().socket().async_send(
                     boost::asio::buffer(msgPtr, msgSize),
@@ -405,13 +405,15 @@ template class http_session<ssl_http_session>;
     detect_session::detect_session(
         tcp::socket&& socket,
         ssl::context& ctx,
-        std::shared_ptr<shared_state> const& state
+        std::shared_ptr<shared_state> const& state,
         // std::shared_ptr<std::string const> const& doc_root
+        Security security
         )
         : stream_(std::move(socket))
         , ctx_(ctx)
         // , doc_root_(doc_root)
         , state_(state)
+        , security_(security)
     {
     }
 
@@ -434,12 +436,21 @@ template class http_session<ssl_http_session>;
         // Set the timeout.
         // stream_.expires_after(std::chrono::seconds(30));
 
-        beast::async_detect_ssl(
-            stream_,
-            buffer_,
-            beast::bind_front_handler(
-                &detect_session::on_detect,
-                this->shared_from_this()));
+        // if the user wants both http/ws and https/wss on this port, you must detect what the client wants
+        if (Security::BOTH == security_)
+        {
+            beast::async_detect_ssl(
+                stream_,
+                buffer_,
+                beast::bind_front_handler(
+                    &detect_session::on_detect,
+                    this->shared_from_this()));
+        }
+        else
+        {
+            // else pretend the client specified what they want
+            on_detect(beast::error_code(), Security::SECURE == security_);
+        }
     }
 
     void detect_session::on_detect(beast::error_code ec, bool result)

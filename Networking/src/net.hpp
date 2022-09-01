@@ -22,6 +22,7 @@
 namespace BeastNetworking
 {
 
+    enum class Security { INSECURE, SECURE, BOTH };
 
 namespace
 {

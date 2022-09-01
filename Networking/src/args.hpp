@@ -26,7 +26,8 @@ namespace BeastNetworking
     float heartbeatPeriod_seconds = 0.5;                  // seconds between heartbeats
 
     std::string serverBindAddress = "0.0.0.0"; // bind server to any address
-    unsigned short serverBindPort = 0;         // bind server to any port
+    unsigned short serverBindPort_insecure = 0;          // port for http and ws
+    unsigned short serverBindPort_secure = 0;            // port for https and wss
     bool verbose = false;
   };
 

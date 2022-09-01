@@ -23,11 +23,13 @@ namespace BeastNetworking
         net::io_context& ioc,
         ssl::context& ctx,
         tcp::endpoint endpoint,
-        std::shared_ptr<shared_state> const& state)
+        std::shared_ptr<shared_state> const& state,
+        Security security)
         : ioc_(ioc)
         , ctx_(ctx)
         , acceptor_(net::make_strand(ioc))
         , state_(state)
+        , security_(security)
     {
         beast::error_code ec;
 
@@ -95,7 +97,8 @@ namespace BeastNetworking
             std::make_shared<detect_session>(
                 std::move(socket),
                 ctx_,
-                state_)->run();
+                state_, 
+                security_)->run();
         }
 
         // Accept another connection

@@ -238,6 +238,12 @@ class http_session
             return was_full;
         }
 
+        // TODO REMOVE ME. THIS IS SO HACKY. NOT EVEN THREAD SAFE
+        size_t size()
+        {
+            return items_.size();
+        }
+
         // Called by the HTTP handler to send a response.
         template<bool isRequest, class Body, class Fields>
         void
@@ -404,13 +410,15 @@ class detect_session : public std::enable_shared_from_this<detect_session>
     // std::shared_ptr<std::string const> doc_root_;
     std::shared_ptr<shared_state> state_;
     beast::flat_buffer buffer_;
+    Security security_;
 
 public:
     explicit
     detect_session(
         tcp::socket&& socket,
         ssl::context& ctx,
-        std::shared_ptr<shared_state> const& state
+        std::shared_ptr<shared_state> const& state,
+        Security security
         // std::shared_ptr<std::string const> const& doc_root
         );
 

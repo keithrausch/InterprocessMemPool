@@ -21,14 +21,15 @@ struct MultiClientSender
   boost::asio::ssl::context &ssl_context;
   std::string topic;                         // topic name
   std::shared_ptr<shared_state> sharedState; // for sending data
-  unsigned short boundServerPort;
+  unsigned short boundServerPort_insecure;
+  unsigned short boundServerPort_secure;
   MultiClientSenderArgs args;
 
   std::uint_fast64_t uniqueInstanceID;
 
   // establish server and get its bound addres and port
   MultiClientSender(boost::asio::io_context &ioc_in, boost::asio::ssl::context &ssl_context_in, const std::string &topic_in, const MultiClientSenderArgs &args_in, std::uint_fast64_t uniqueInstanceID_in = 0, const std::shared_ptr<RateLimiting::RateTracker> &rate_tracker_in=nullptr)
-      : ioc(ioc_in), ssl_context(ssl_context_in), topic(topic_in), boundServerPort(0), args(args_in), uniqueInstanceID(uniqueInstanceID_in)
+      : ioc(ioc_in), ssl_context(ssl_context_in), topic(topic_in), boundServerPort_insecure(0), boundServerPort_secure(0), args(args_in), uniqueInstanceID(uniqueInstanceID_in)
   {
 
     shared_state::Callbacks callbacks;
@@ -43,24 +44,51 @@ struct MultiClientSender
       std::printf("PRODUCER-READ - endpoint: %s\n%s\n", endpointString.c_str(), msg.c_str());
     };
 
-    tcp::endpoint our_endpoint(net::ip::make_address(args.serverBindAddress), args.serverBindPort);
-
-
     if (args.verbose)
     {
       auto to_string = [](const tcp::endpoint &endpoint){ return endpoint.address().to_string() + ":" + std::to_string(endpoint.port());};
-      callbacks.callbackUpgrade = [our_endpoint, to_string](const tcp::endpoint &endpoint) { std::cout << "InterprocessMemPool::MultiClientSender::on_upgrade() - our endpoint: " + to_string(our_endpoint) +", accepting endpoint: " + to_string(endpoint) + "\n"; };
-      callbacks.callbackClose = [our_endpoint, to_string](const tcp::endpoint &endpoint) { std::cout << "InterprocessMemPool::MultiClientSender::on_close() - our endpoint: " + to_string(our_endpoint) + ", closing endpoint: " + to_string(endpoint) + "\n"; };
+      callbacks.callbackUpgrade = [to_string](const tcp::endpoint &endpoint) { std::cout << "InterprocessMemPool::MultiClientSender::on_upgrade() - accepting endpoint: " + to_string(endpoint) + "\n"; };
+      callbacks.callbackClose = [to_string](const tcp::endpoint &endpoint) { std::cout << "InterprocessMemPool::MultiClientSender::on_close() - closing endpoint: " + to_string(endpoint) + "\n"; };
     }
 
     sharedState = std::make_shared<shared_state>(callbacks);
 
-    // bind to any address, any port
-    auto listenerPtr = std::make_shared<listener>(ioc, ssl_context, our_endpoint, sharedState);
-    if (listenerPtr)
+    // bind to any address, any port (insecure)
+    if (args.serverBindPort_insecure == args.serverBindPort_secure && args.serverBindPort_secure > 0)
     {
-      listenerPtr->run();
-      boundServerPort = listenerPtr->localEndpoint.port();
+        tcp::endpoint our_endpoint(net::ip::make_address(args.serverBindAddress), args.serverBindPort_secure);
+        auto listenerPtr = std::make_shared<listener>(ioc, ssl_context, our_endpoint, sharedState, BeastNetworking::Security::BOTH);
+        if (listenerPtr)
+        {
+          listenerPtr->run();
+          boundServerPort_insecure = listenerPtr->localEndpoint.port();
+          boundServerPort_secure = listenerPtr->localEndpoint.port();
+        }
+    }
+    else
+    {
+      if (args.serverBindPort_insecure > 0)
+      {
+        tcp::endpoint our_endpoint(net::ip::make_address(args.serverBindAddress), args.serverBindPort_insecure);
+        auto listenerPtr = std::make_shared<listener>(ioc, ssl_context, our_endpoint, sharedState, BeastNetworking::Security::INSECURE);
+        if (listenerPtr)
+        {
+          listenerPtr->run();
+          boundServerPort_insecure = listenerPtr->localEndpoint.port();
+        }
+      }
+
+      // bind to any address, any port (secure)
+      if (args.serverBindPort_secure > 0)
+      {
+        tcp::endpoint our_endpoint(net::ip::make_address(args.serverBindAddress), args.serverBindPort_secure);
+        auto listenerPtr = std::make_shared<listener>(ioc, ssl_context, our_endpoint, sharedState, BeastNetworking::Security::BOTH);
+        if (listenerPtr)
+        {
+          listenerPtr->run();
+          boundServerPort_secure = listenerPtr->localEndpoint.port();
+        }
+      }
     }
   }
 
@@ -78,7 +106,8 @@ struct MultiClientSender
 
       std::stringstream ss;
       ss << "topic:" << topic
-         << ",port:" << boundServerPort
+         << ",port_insecure:" << boundServerPort_insecure
+         << ",port_secure:" << boundServerPort_secure
          << ",id:" << uniqueInstanceID
          << ",endian:" << (uint16_t)1
          << ",system_time:" << duration_cast<milliseconds>(system_clock::now().time_since_epoch()).count()

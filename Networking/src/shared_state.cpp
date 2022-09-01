@@ -52,7 +52,7 @@ shared_state::shared_state(std::string doc_root, const Callbacks &callbacks_in)
 size_t shared_state::nSessions()
 {
   std::lock_guard<MutexT> lock(mutex_);
-  return ws_sessions_.size() + wss_sessions_.size() + https_sessions_.size() + https_sessions_.size();
+  return ws_sessions_.size() + wss_sessions_.size() + http_sessions_.size() + https_sessions_.size();
 }
 
 void shared_state::upgrade(plain_websocket_session *ws_session)

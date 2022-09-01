@@ -26,6 +26,7 @@ class listener : public std::enable_shared_from_this<listener>
     tcp::acceptor acceptor_;
     // std::shared_ptr<std::string const> doc_root_;
     std::shared_ptr<shared_state> state_;
+    Security security_;
 
 public:
     tcp::endpoint localEndpoint;
@@ -34,7 +35,8 @@ public:
         net::io_context& ioc,
         ssl::context& ctx,
         tcp::endpoint endpoint,
-        std::shared_ptr<shared_state> const& state);
+        std::shared_ptr<shared_state> const& state, 
+        Security security);
 
     // Start accepting incoming connections
     void run();

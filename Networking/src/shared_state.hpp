@@ -106,7 +106,7 @@ public:
         return doc_root_;
     }
 
-  size_t nSessions();
+  size_t nSessions(size_t &insecure, size_t &secure);
 
   void upgrade(plain_websocket_session *ws_session);
   void downgrade(plain_websocket_session *ws_session);

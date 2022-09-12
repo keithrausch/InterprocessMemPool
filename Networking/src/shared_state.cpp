@@ -49,10 +49,12 @@ shared_state::shared_state(std::string doc_root, const Callbacks &callbacks_in)
     std::cout <<  "BeastWebServer - starting server at root \"" + doc_root_ + "\"\n";
 }
 
-size_t shared_state::nSessions()
+size_t shared_state::nSessions(size_t &insecure, size_t &secure)
 {
   std::lock_guard<MutexT> lock(mutex_);
-  return ws_sessions_.size() + wss_sessions_.size() + http_sessions_.size() + https_sessions_.size();
+  insecure = ws_sessions_.size() + http_sessions_.size();
+  secure = wss_sessions_.size() + https_sessions_.size();
+  return insecure + secure;
 }
 
 void shared_state::upgrade(plain_websocket_session *ws_session)

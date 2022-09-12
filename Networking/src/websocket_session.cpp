@@ -200,6 +200,13 @@ template<class Derived>
 template<class Derived>
   void websocket_session<Derived>::on_handshake(beast::error_code ec)
   {
+    //
+    // this function is only accessed when the user creates a websocket client 
+    // which goes through the RunClient, on_resolve, on_connect, on_handshake chain
+    //
+    // when creating a connection this way, the normal call to state_->upgrade(&derived()); 
+    // does not get executed, so we will call it here
+
     if (ec)
       return on_error(ec);
 
@@ -207,10 +214,8 @@ template<class Derived>
     // https://stackoverflow.com/questions/7730260/binary-vs-string-transfer-over-a-stream
     // means bytes sent are bytes received, no UTF-8 text encode/decode
 
-    // if (state_->callbacks.callbackAccept)
-    // {
-    //     state_->callbacks.callbackAccept(endpoint);
-    // }
+    // Add this session to the list of active sessions
+    state_->upgrade(&derived());
 
     // Send the message
     derived().ws().async_read(

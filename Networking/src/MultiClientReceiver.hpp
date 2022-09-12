@@ -269,13 +269,16 @@ class MultiClientReceiver : public std::enable_shared_from_this<MultiClientRecei
     auto callbackError = [](const boost::asio::ip::udp::endpoint &, boost::system::error_code ec) { std::cout << "CONSUMER-ERROR CALLBACK WAS CALLED: " << ec.message() << ec.value() << std::endl; };
     callbacks.callbackError = callbackError;
 
-    auto callbackTimeout = [this]() {
+    std::weak_ptr<MultiClientReceiver> weak = shared_from_this();
+    auto callbackTimeout = [weak]() {
+      auto strong = weak.lock();
+      if (!strong) return;
       std::cout << "MULTICLIENTRECEIVER::CALLBACK_TIMEOUT() - STOPPING IO_CONTEXT\n";
-      io_context.stop();
+      strong->io_context.stop();
     };
     callbacks.callbackTimeout = callbackTimeout;
 
-    callbacks.callbackRead = std::bind(&MultiClientReceiver::ProcessBroadcast, this, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
+    callbacks.callbackRead = std::bind(&MultiClientReceiver::ProcessBroadcast, this /*do not use owning reference*/, std::placeholders::_1, std::placeholders::_2, std::placeholders::_3);
 
     udpReceiverPtr = std::make_shared<utils_asio::UDPReceiver>(io_context,
                                                                args.broadcastRcvPort,

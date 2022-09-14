@@ -81,7 +81,11 @@ class MultiClientReceiver : public std::enable_shared_from_this<MultiClientRecei
     bool created_client = false;
 
     auto &state = topicStates[topic];
-
+    if ( ! state)
+    {
+      std::cout << "BeastNetworking::MultiClientReceiver() - the state for topic \""+topic+"\" is null. you are about to have a very bad time.\n";
+      return created_client;
+    }
     auto uniqueClientName = UniqueClientName(topic, serverEndpoint);
 
     if (args.useSSL)

@@ -30,7 +30,8 @@ template<class Derived>
         if (ec == net::error::operation_aborted || ec == websocket::error::closed)
             return;
 
-        state_->on_error(endpoint, ec);
+        if (state_)
+            state_->on_error(endpoint, ec);
     }
 
 
@@ -66,7 +67,8 @@ template<class Derived>
             return on_error(ec);
 
         // Add this session to the list of active sessions
-        state_->upgrade(&derived());
+        if (state_)
+            state_->upgrade(&derived());
 
         // Read a message
         derived().ws().async_read(
@@ -83,7 +85,8 @@ template<class Derived>
             return on_error(ec);
 
         // Send to all connections
-        state_->on_ws_read(endpoint, buffer_.data().data(), bytes_transferred);
+        if (state_)
+            state_->on_ws_read(endpoint, buffer_.data().data(), bytes_transferred);
 
         // Clear the buffer
         buffer_.consume(buffer_.size());
@@ -215,7 +218,8 @@ template<class Derived>
     // means bytes sent are bytes received, no UTF-8 text encode/decode
 
     // Add this session to the list of active sessions
-    state_->upgrade(&derived());
+    if (state_)
+        state_->upgrade(&derived());
 
     // Send the message
     derived().ws().async_read(
@@ -265,7 +269,8 @@ template<class Derived>
         }
 
         // Remove this session from the list of active sessions
-        state_->downgrade(&derived());
+        if (state_)
+            state_->downgrade(&derived());
     }
 
 

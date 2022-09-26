@@ -28,7 +28,7 @@ struct MultiClientSender
   std::uint_fast64_t uniqueInstanceID;
 
   // establish server and get its bound addres and port
-  MultiClientSender(boost::asio::io_context &ioc_in, boost::asio::ssl::context &ssl_context_in, const std::string &topic_in, const MultiClientSenderArgs &args_in, std::uint_fast64_t uniqueInstanceID_in = 0, const std::shared_ptr<RateLimiting::RateTracker> &rate_tracker_in=nullptr)
+  MultiClientSender(boost::asio::io_context &ioc_in, boost::asio::ssl::context &ssl_context_in, const std::string &topic_in, const MultiClientSenderArgs &args_in, std::uint_fast64_t uniqueInstanceID_in = 0/*, const std::shared_ptr<RateLimiting::RateTracker> &rate_tracker_in=nullptr*/)
       : ioc(ioc_in), ssl_context(ssl_context_in), topic(topic_in), boundServerPort_insecure(0), boundServerPort_secure(0), args(args_in), uniqueInstanceID(uniqueInstanceID_in)
   {
 

@@ -225,7 +225,7 @@ class MultiClientReceiver : public std::enable_shared_from_this<MultiClientRecei
     bool created_new_client = ConnectToServer(topic, serverEndpoint);
     if (created_new_client && args.verbose)
     {
-      std::cout << "InterprocessMemPool::try_connection() - creating new connection for topic \"" + topic + "\" at endpoint: " + EndpointToString(serverEndpoint) + "\n";
+      std::cout << "BeastNetworking::try_connection() - creating new connection for topic \"" + topic + "\" at endpoint: " + EndpointToString(serverEndpoint) + "\n";
     }
 
     timer->expires_after(boost::asio::chrono::milliseconds((size_t)(period_seconds * 1000))); // cancels the timer and resets it

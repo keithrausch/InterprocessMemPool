@@ -75,6 +75,7 @@ public:
     typedef std::function<void(const endpointT &endpoint)> CallbackSocketDowngradeT;
     typedef std::function<void(const endpointT &endpoint)> CallbackSocketCloseT;
     typedef std::function<void(const endpointT &endpoint, const beast::error_code &ec)> CallbackErrorT;
+    typedef std::function<void(const std::string &)> CallbackPrintT;
 
     CallbackReadT callbackWSRead;
     CallbackReadT callbackHTTPRead;
@@ -83,6 +84,7 @@ public:
     CallbackSocketAcceptT callbackDowngrade;
     CallbackSocketCloseT callbackClose;
     CallbackErrorT callbackError;
+    CallbackPrintT callbackPrint = [](const std::string &str){ std::cout << str << std::endl; };
   };
 
   Callbacks callbacks;
@@ -106,6 +108,7 @@ public:
         return doc_root_;
     }
 
+  void check_doc_root();
   size_t nSessions(size_t &insecure, size_t &secure);
 
   void upgrade(plain_websocket_session *ws_session);

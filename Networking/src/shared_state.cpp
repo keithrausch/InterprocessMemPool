@@ -29,10 +29,6 @@ shared_state::shared_state()
 shared_state::shared_state(std::string doc_root )
     : doc_root_(std::move(doc_root)), callbacks()
 {
-  if ( ! std::filesystem::exists(doc_root_))
-    std::cerr << "BeastWebServer - root directory does not exist \"" + doc_root_ + "\"\n";
-  else
-    std::cout <<  "BeastWebServer - starting server at root \"" + doc_root_ + "\"\n";
 }
 
 shared_state::shared_state(const Callbacks &callbacks_in)
@@ -43,10 +39,21 @@ shared_state::shared_state(const Callbacks &callbacks_in)
 shared_state::shared_state(std::string doc_root, const Callbacks &callbacks_in)
     : doc_root_(std::move(doc_root)), callbacks(callbacks_in)
 {
-  if ( ! std::filesystem::exists(doc_root_))
-    std::cerr << "BeastWebServer - root directory does not exist \"" + doc_root_ + "\"\n";
-  else
-    std::cout <<  "BeastWebServer - starting server at root \"" + doc_root_ + "\"\n";
+}
+
+void shared_state::check_doc_root()
+{
+  if (callbacks.callbackPrint)
+  {
+    if ( ! std::filesystem::exists(doc_root_))
+    {
+      callbacks.callbackPrint("root directory does not exist \"" + doc_root_ + "\"");
+    }
+    else
+    {
+      callbacks.callbackPrint("starting server at root \"" + doc_root_ + "\"");
+    }
+  }
 }
 
 size_t shared_state::nSessions(size_t &insecure, size_t &secure)

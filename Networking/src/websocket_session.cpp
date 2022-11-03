@@ -245,8 +245,8 @@ template<class Derived>
                       const std::string &serverAddress_in,
                       unsigned short serverPort_in) 
                       : state_(state_in), 
-                      resolver_(std::make_shared<tcp::resolver>(net::make_strand(ioc))), 
-                      rate_enforcer(state_in && state_in->rate_tracker ? state_in->rate_tracker->make_enforcer(state_in->rate_enforcer_args) : RateLimiting::RateEnforcer()),
+                        resolver_(std::make_shared<tcp::resolver>(net::make_strand(ioc))), 
+                        rate_enforcer(state_in && state_in->rate_tracker ? state_in->rate_tracker->make_enforcer(state_in->rate_enforcer_args) : RateLimiting::RateEnforcer()),
                         serverAddress(serverAddress_in),
                         serverPort(serverPort_in),
                         endpoint()
@@ -360,9 +360,7 @@ template class websocket_session<ssl_websocket_session>;
     beast::get_lowest_layer(ws_).expires_never();
 
     // Set suggested timeout settings for the websocket
-    ws_.set_option(
-        websocket::stream_base::timeout::suggested(
-            beast::role_type::client));
+    ws_.set_option(get_client_timeout());
 
     // Set a decorator to change the User-Agent of the handshake
     ws_.set_option(websocket::stream_base::decorator(
@@ -419,7 +417,10 @@ void ssl_websocket_session::on_connect(beast::error_code ec, tcp::resolver::resu
     endpoint = ep;
 
     if(ec)
-        return fail(ec, "connect");
+    {
+        // fail(ec, "on_connect");
+        return; 
+    }
 
     // Update the host_ string. This will provide the value of the
     // Host HTTP header during the WebSocket handshake.
@@ -437,9 +438,9 @@ void ssl_websocket_session::on_connect(beast::error_code ec, tcp::resolver::resu
             ws_.next_layer().native_handle(),
             host_.c_str()))
     {
-        ec = beast::error_code(static_cast<int>(::ERR_get_error()),
-            net::error::get_ssl_category());
-        return fail(ec, "connect");
+        ec = beast::error_code(static_cast<int>(::ERR_get_error()), net::error::get_ssl_category());
+        // fail(ec, "on_connect");
+        return; 
     }
 
     // Perform the SSL handshake
@@ -467,9 +468,7 @@ void ssl_websocket_session::on_connect(beast::error_code ec, tcp::resolver::resu
     beast::get_lowest_layer(ws_).expires_never();
 
     // Set suggested timeout settings for the websocket
-    ws_.set_option(
-        websocket::stream_base::timeout::suggested(
-            beast::role_type::client));
+    ws_.set_option(get_client_timeout());
 
     // Set a decorator to change the User-Agent of the handshake
     ws_.set_option(websocket::stream_base::decorator(

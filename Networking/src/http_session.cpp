@@ -75,7 +75,7 @@ namespace BeastNetworking
         }
 
         if(ec && !arbitrary_message)
-            return fail(ec, "read");
+            return fail(ec, "on_read");
 
         // See if it is a WebSocket Upgrade
         if(websocket::is_upgrade(parser_->get()))
@@ -107,7 +107,7 @@ namespace BeastNetworking
         boost::ignore_unused(bytes_transferred);
 
         if(ec)
-            return fail(ec, "write");
+            return fail(ec, "on_write");
 
         if(close)
         {
@@ -381,7 +381,7 @@ template class http_session<ssl_http_session>;
         std::size_t bytes_used)
     {
         if(ec)
-            return fail(ec, "handshake");
+            return fail(ec, "on_handshake");
 
         // Consume the portion of the buffer used by the handshake
         buffer_.consume(bytes_used);
@@ -393,7 +393,7 @@ template class http_session<ssl_http_session>;
     void ssl_http_session::on_shutdown(beast::error_code ec)
     {
         if(ec)
-            return fail(ec, "shutdown");
+            return fail(ec, "on_shutdown");
 
         // At this point the connection is closed gracefully
     }
@@ -456,7 +456,7 @@ template class http_session<ssl_http_session>;
     void detect_session::on_detect(beast::error_code ec, bool result)
     {
         if(ec)
-            return fail(ec, "detect");
+            return fail(ec, "on_detect");
 
         if(result)
         {

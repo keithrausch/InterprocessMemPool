@@ -118,13 +118,20 @@ public:
 
     // void replaceSendAsync(const void* msgPtr, size_t msgSize, shared_state::CompletionHandlerT &&completionHandler);
 
+    // Resolver and socket require an io_context
+    void RunClient();
 
-  // Resolver and socket require an io_context
-  void RunClient();
-
-
-
-
+    websocket::stream_base::timeout get_client_timeout()
+    {
+        auto timeout_params = websocket::stream_base::timeout::suggested(beast::role_type::client);
+        if (state_)
+        {
+            auto ws_idle_timeout = state_->timeouts.ws_idle_timeout; // readability
+            timeout_params.idle_timeout = ws_idle_timeout > 0 ? std::chrono::seconds(ws_idle_timeout) : websocket::stream_base::none();
+            timeout_params.keep_alive_pings = state_->timeouts.ws_client_sends_keep_alives;
+        }
+        return timeout_params;
+    }
 };
 
 //------------------------------------------------------------------------------
@@ -158,9 +165,6 @@ public:
     // Called by the base class
     websocket::stream<beast::tcp_stream>&
     ws();
-
-
-
 
   void on_connect(beast::error_code ec, tcp::resolver::results_type::endpoint_type ep);
 

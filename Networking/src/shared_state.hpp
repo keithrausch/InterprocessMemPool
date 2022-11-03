@@ -87,7 +87,14 @@ public:
     CallbackPrintT callbackPrint = [](const std::string &str){ std::cout << str << std::endl; };
   };
 
+  struct TimeoutSettings
+  {
+    int64_t ws_idle_timeout = 300; // integer seconds
+    bool ws_client_sends_keep_alives = true; // set at intervals of half the idle time
+  };
+
   Callbacks callbacks;
+  TimeoutSettings timeouts;
   RateLimiting::RateEnforcer::Args rate_enforcer_args; // default
   RateLimiting::sRateTracker rate_tracker;
 

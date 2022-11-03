@@ -37,7 +37,7 @@ namespace BeastNetworking
         acceptor_.open(endpoint.protocol(), ec);
         if(ec)
         {
-            fail(ec, "open");
+            fail(ec, "on_open");
             return;
         }
 
@@ -53,7 +53,7 @@ namespace BeastNetworking
         acceptor_.bind(endpoint, ec);
         if(ec)
         {
-            fail(ec, "bind");
+            fail(ec, "on_bind");
             return;
         }
 
@@ -64,7 +64,7 @@ namespace BeastNetworking
             net::socket_base::max_listen_connections, ec);
         if(ec)
         {
-            fail(ec, "listen");
+            fail(ec, "on_listen");
             return;
         }
     };
@@ -89,7 +89,7 @@ namespace BeastNetworking
     {
         if(ec)
         {
-            fail(ec, "accept");
+            fail(ec, "on_accept");
         }
         else
         {

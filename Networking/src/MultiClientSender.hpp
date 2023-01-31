@@ -136,6 +136,8 @@ struct MultiClientSender
   }
 };
 
+typedef std::shared_ptr<MultiClientSender> sMultiClientSender;
+
 } // namespace
 
 #endif

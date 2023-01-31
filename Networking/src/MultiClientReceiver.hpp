@@ -322,6 +322,37 @@ class MultiClientReceiver : public std::enable_shared_from_this<MultiClientRecei
       
   }
 
+  void SendAsync(void* msgPtr, size_t msgSize, BeastNetworking::shared_state::CompletionHandlerT &&completionHandler = BeastNetworking::shared_state::CompletionHandlerT(), bool force_send=false, size_t max_queue_size=std::numeric_limits<size_t>::max())
+  {
+    std::lock_guard<std::mutex> lock(clientsMutex);
+
+    bool found = false;
+
+    for (auto & pair : clients)  
+    {
+      auto client = pair.second.lock();
+      if (client)
+      {
+        client->sendAsync(msgPtr, msgSize, std::move(completionHandler), force_send, max_queue_size);
+        found = true;
+      }
+    }
+
+    for (auto & pair : clientsSSL)  
+    {
+      auto client = pair.second.lock();
+      if (client)
+      {
+        client->sendAsync(msgPtr, msgSize, std::move(completionHandler), force_send, max_queue_size);
+        found = true;
+      }
+    }
+    
+    if ( ! found)
+      completionHandler(boost::asio::error::operation_aborted, 0, boost::asio::ip::tcp::endpoint());
+      
+  }
+
 
   template <typename EndpointT>
   void SendAsync(const std::string &topic, const EndpointT &endpoint, const std::string &str, bool force_send=false, size_t max_queue_size=std::numeric_limits<size_t>::max())
@@ -337,6 +368,26 @@ class MultiClientReceiver : public std::enable_shared_from_this<MultiClientRecei
     }
     {
       auto client = clientsSSL[uniqueClientName].lock();
+      if (client)
+        client->sendAsync((*strPtr).data(), (*strPtr).length(), [strPtr](boost::beast::error_code, size_t, const boost::asio::ip::tcp::endpoint &){}, force_send, max_queue_size);
+    }
+  }
+
+  void SendAsync(const std::string &str, bool force_send=false, size_t max_queue_size=std::numeric_limits<size_t>::max())
+  {
+    std::shared_ptr<std::string> strPtr = std::make_shared<std::string>(str);
+    std::lock_guard<std::mutex> lock(clientsMutex);
+    
+    for (auto &pair : clients)
+    {
+      auto client = pair.second.lock();
+      if (client)
+        client->sendAsync((*strPtr).data(), (*strPtr).length(), [strPtr](boost::beast::error_code, size_t, const boost::asio::ip::tcp::endpoint &){}, force_send, max_queue_size);
+    }
+
+    for (auto & pair : clientsSSL)
+    {
+      auto client = pair.second.lock();
       if (client)
         client->sendAsync((*strPtr).data(), (*strPtr).length(), [strPtr](boost::beast::error_code, size_t, const boost::asio::ip::tcp::endpoint &){}, force_send, max_queue_size);
     }
@@ -368,6 +419,7 @@ class MultiClientReceiver : public std::enable_shared_from_this<MultiClientRecei
 
 };
 
+typedef std::shared_ptr<MultiClientReceiver> sMultiClientReceiver; 
 } // namespace
 
 #endif

@@ -360,7 +360,7 @@ template class websocket_session<ssl_websocket_session>;
     beast::get_lowest_layer(ws_).expires_never();
 
     // Set suggested timeout settings for the websocket
-    ws_.set_option(get_client_timeout());
+    ws_.set_option(get_timeout_settings_for_client());
 
     // Set a decorator to change the User-Agent of the handshake
     ws_.set_option(websocket::stream_base::decorator(
@@ -468,7 +468,7 @@ void ssl_websocket_session::on_connect(beast::error_code ec, tcp::resolver::resu
     beast::get_lowest_layer(ws_).expires_never();
 
     // Set suggested timeout settings for the websocket
-    ws_.set_option(get_client_timeout());
+    ws_.set_option(get_timeout_settings_for_client());
 
     // Set a decorator to change the User-Agent of the handshake
     ws_.set_option(websocket::stream_base::decorator(

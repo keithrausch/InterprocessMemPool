@@ -90,7 +90,7 @@ public:
   struct TimeoutSettings
   {
     int64_t ws_idle_timeout = 300; // integer seconds
-    bool ws_client_sends_keep_alives = true; // set at intervals of half the idle time
+    bool send_keep_alives = true; // set at intervals of half the idle time
   };
 
   Callbacks callbacks;

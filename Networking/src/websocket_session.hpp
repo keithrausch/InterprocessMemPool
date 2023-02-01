@@ -75,9 +75,7 @@ public:
         // do_accept(std::move(req));
 
         // Set suggested timeout settings for the websocket
-        derived().ws().set_option(
-            websocket::stream_base::timeout::suggested(
-                beast::role_type::server));
+        derived().ws().set_option(get_timeout_settings_for_server());
 
         // Set a decorator to change the Server of the handshake
         derived().ws().set_option(websocket::stream_base::decorator(
@@ -121,14 +119,30 @@ public:
     // Resolver and socket require an io_context
     void RunClient();
 
-    websocket::stream_base::timeout get_client_timeout()
+    websocket::stream_base::timeout get_timeout_settings_for_client()
     {
+        // get default params and then tweak them
         auto timeout_params = websocket::stream_base::timeout::suggested(beast::role_type::client);
+
         if (state_)
         {
             auto ws_idle_timeout = state_->timeouts.ws_idle_timeout; // readability
             timeout_params.idle_timeout = ws_idle_timeout > 0 ? std::chrono::seconds(ws_idle_timeout) : websocket::stream_base::none();
-            timeout_params.keep_alive_pings = state_->timeouts.ws_client_sends_keep_alives;
+            timeout_params.keep_alive_pings = state_->timeouts.send_keep_alives; // ordinarily false
+        }
+        return timeout_params;
+    }
+
+    websocket::stream_base::timeout get_timeout_settings_for_server()
+    {
+        // get default params and then tweak them
+        auto timeout_params = websocket::stream_base::timeout::suggested(beast::role_type::server);
+
+        if (state_)
+        {
+            auto ws_idle_timeout = state_->timeouts.ws_idle_timeout; // readability
+            timeout_params.idle_timeout = ws_idle_timeout > 0 ? std::chrono::seconds(ws_idle_timeout) : websocket::stream_base::none();
+            timeout_params.keep_alive_pings = state_->timeouts.send_keep_alives; // ordinarily true
         }
         return timeout_params;
     }

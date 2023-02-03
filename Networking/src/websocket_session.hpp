@@ -45,6 +45,7 @@ class websocket_session
 
     std::shared_ptr<tcp::resolver> resolver_;
     RateLimiting::RateEnforcer rate_enforcer;
+    std::atomic<bool> upgraded;
 
 
 

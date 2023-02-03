@@ -67,7 +67,7 @@ template<class Derived>
             return on_error(ec);
 
         // Add this session to the list of active sessions
-        if (state_)
+        if (state_ && !upgraded.exchange(true))
             state_->upgrade(&derived());
 
         // Read a message
@@ -218,7 +218,7 @@ template<class Derived>
     // means bytes sent are bytes received, no UTF-8 text encode/decode
 
     // Add this session to the list of active sessions
-    if (state_)
+    if (state_ && ! upgraded.exchange(true))
         state_->upgrade(&derived());
 
     // Send the message
@@ -235,7 +235,8 @@ template<class Derived>
         : state_(state_in), 
         rate_enforcer(state_in && state_in->rate_tracker ? state_in->rate_tracker->make_enforcer(state_in->rate_enforcer_args) : RateLimiting::RateEnforcer()),
         serverPort(0), 
-        endpoint(endpoint_in)
+        endpoint(endpoint_in),
+        upgraded(false)
     {
     }
 
@@ -249,7 +250,8 @@ template<class Derived>
                         rate_enforcer(state_in && state_in->rate_tracker ? state_in->rate_tracker->make_enforcer(state_in->rate_enforcer_args) : RateLimiting::RateEnforcer()),
                         serverAddress(serverAddress_in),
                         serverPort(serverPort_in),
-                        endpoint()
+                        endpoint(),
+                        upgraded(false)
     {
     }
 
@@ -269,8 +271,10 @@ template<class Derived>
         }
 
         // Remove this session from the list of active sessions
-        if (state_)
+        if (state_ && upgraded.exchange(false))
+        {
             state_->downgrade(&derived());
+        }
     }
 
 

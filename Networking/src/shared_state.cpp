@@ -66,8 +66,10 @@ size_t shared_state::nSessions(size_t &insecure, size_t &secure)
 
 void shared_state::upgrade(plain_websocket_session *ws_session)
 {
-  std::lock_guard<MutexT> lock(mutex_);
-  ws_sessions_.insert(ws_session);
+  { // callback functions may attempt a sendAsync which locks the mutex
+    std::lock_guard<MutexT> lock(mutex_);
+    ws_sessions_.insert(ws_session);
+  }
 
   if (callbacks.callbackUpgrade)
     callbacks.callbackUpgrade(ws_session->endpoint);
@@ -75,8 +77,10 @@ void shared_state::upgrade(plain_websocket_session *ws_session)
 
 void shared_state::downgrade(plain_websocket_session *ws_session)
 {
-  std::lock_guard<MutexT> lock(mutex_);
-  ws_sessions_.erase(ws_session);
+  { // callback functions may attempt a sendAsync which locks the mutex
+    std::lock_guard<MutexT> lock(mutex_);
+    ws_sessions_.erase(ws_session);
+  }
 
   if (callbacks.callbackDowngrade)
     callbacks.callbackDowngrade(ws_session->endpoint);
@@ -84,8 +88,10 @@ void shared_state::downgrade(plain_websocket_session *ws_session)
 
 void shared_state::upgrade(ssl_websocket_session *wss_session)
 {
-  std::lock_guard<MutexT> lock(mutex_);
-  wss_sessions_.insert(wss_session);
+  { // callback functions may attempt a sendAsync which locks the mutex
+    std::lock_guard<MutexT> lock(mutex_);
+    wss_sessions_.insert(wss_session);
+  }
 
   if (callbacks.callbackUpgrade)
     callbacks.callbackUpgrade(wss_session->endpoint);
@@ -93,8 +99,10 @@ void shared_state::upgrade(ssl_websocket_session *wss_session)
 
 void shared_state::downgrade(ssl_websocket_session *wss_session)
 {
-  std::lock_guard<MutexT> lock(mutex_);
-  wss_sessions_.erase(wss_session);
+  { // callback functions may attempt a sendAsync which locks the mutex
+    std::lock_guard<MutexT> lock(mutex_);
+    wss_sessions_.erase(wss_session);
+  }
 
   if (callbacks.callbackDowngrade)
     callbacks.callbackDowngrade(wss_session->endpoint);
@@ -104,8 +112,10 @@ void shared_state::downgrade(ssl_websocket_session *wss_session)
 
 void shared_state::join(plain_http_session *session)
 {
-  std::lock_guard<MutexT> lock(mutex_);
-  http_sessions_.insert(session);
+  { // callback functions may attempt a sendAsync which locks the mutex
+    std::lock_guard<MutexT> lock(mutex_);
+    http_sessions_.insert(session);
+  }
 
   if (callbacks.callbackAccept)
     callbacks.callbackAccept(session->endpoint);
@@ -113,8 +123,10 @@ void shared_state::join(plain_http_session *session)
 
 void shared_state::leave(plain_http_session *session)
 {
-  std::lock_guard<MutexT> lock(mutex_);
-  http_sessions_.erase(session);
+  { // callback functions may attempt a sendAsync which locks the mutex
+    std::lock_guard<MutexT> lock(mutex_);
+    http_sessions_.erase(session);
+  }
 
   if (callbacks.callbackClose)
     callbacks.callbackClose(session->endpoint);
@@ -122,8 +134,10 @@ void shared_state::leave(plain_http_session *session)
 
 void shared_state::join(ssl_http_session *session)
 {
-  std::lock_guard<MutexT> lock(mutex_);
-  https_sessions_.insert(session);
+  { // callback functions may attempt a sendAsync which locks the mutex
+    std::lock_guard<MutexT> lock(mutex_);
+    https_sessions_.insert(session);
+  }
 
   if (callbacks.callbackAccept)
     callbacks.callbackAccept(session->endpoint);
@@ -131,8 +145,10 @@ void shared_state::join(ssl_http_session *session)
 
 void shared_state::leave(ssl_http_session *session)
 {
-  std::lock_guard<MutexT> lock(mutex_);
-  https_sessions_.erase(session);
+  { // callback functions may attempt a sendAsync which locks the mutex
+    std::lock_guard<MutexT> lock(mutex_);
+    https_sessions_.erase(session);
+  }
 
   if (callbacks.callbackClose)
     callbacks.callbackClose(session->endpoint);

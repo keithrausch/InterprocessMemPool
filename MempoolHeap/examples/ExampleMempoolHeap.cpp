@@ -24,7 +24,7 @@ struct MyClass
   ~MyClass() { std::cout << "~MyClass(" << x << ")\n"; }
 };
 
-int main(int, char *[])
+void test_static_pool()
 {
   //
   // backend allocators are optional, will default to std::allocator.
@@ -55,8 +55,9 @@ int main(int, char *[])
   // print some statistics
   size_t nOutstanding;
   size_t nAvailable;
-  myAllocator.statistics(nOutstanding, nAvailable);
-  std::printf("\nshared_ptr pool has %zu outstanding and %zu available\n\n", nOutstanding, nAvailable);
+  size_t historic_min_available;
+  myAllocator.statistics(nOutstanding, nAvailable, historic_min_available);
+  std::printf("\nshared_ptr pool has %zu outstanding, %zu available, %zu is historic-low in availability\n\n", nOutstanding, nAvailable, historic_min_available);
 
   std::cout << " ---------- make some shared pointers to T[] objects- THESE OBJECTS ARE NOT ALLOCATED, BUT THEY ARE CONSTRUCTED IF NON-ARITHMETIC ---------- \n";
 
@@ -82,9 +83,17 @@ int main(int, char *[])
   }
 
   // print some
-  myArrayAllocator.Statistics(nOutstanding, nAvailable);
-  std::printf("\narray has %zu outstanding and %zu available\n\n", nOutstanding, nAvailable);
+  myArrayAllocator.Statistics(nOutstanding, nAvailable, historic_min_available);
+  std::printf("\narray has %zu outstanding, %zu available, %zu is historic low in availability\n\n", nOutstanding, nAvailable, historic_min_available);
+}
 
+
+
+
+int main(int, char *[])
+{
+  std::cout << " ---------- testing static pool ---------- \n";
+  test_static_pool();
   std::cout << " ---------- end of main() ---------- \n";
 
   return 0;

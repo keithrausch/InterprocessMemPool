@@ -10,6 +10,7 @@
 #include <memory>     // std::align
 #include <cstddef>    // std::max_align_t
 #include <functional> // std::function
+#include <type_traits>
 
 namespace IPC
 {
@@ -106,12 +107,13 @@ class AllocatorState
   RawMemory<AllocatorT> memoryPtrsToRaw;
   uint8_t* rawAligned;
   uint8_t** ptrsAligned;
-  size_t nElementsTotal;     // number of elements in pool (element is a whole array in when in array mode)
-  size_t nAvailable;         // number of elements currently loaned out
-  bool initialized;          // pool is allocated and setup
+  size_t nElementsTotal;         // number of elements in pool (element is a whole array in when in array mode)
+  size_t nAvailable;             // number of elements currently loaned out
+  size_t historic_min_available; // lowest number of elements available in history of the pool
+  bool initialized;              // pool is allocated and setup
   
-  size_t sizeSharedT;        // total size of each block in this pool
-  size_t alignSharedT;       // alignment of each block in this pool
+  size_t sizeSharedT;            // total size of each block in this pool
+  size_t alignSharedT;           // alignment of each block in this pool
   std::function<void(size_t)> destructorCallback;
 
   public:
@@ -126,6 +128,7 @@ class AllocatorState
     rawAligned(nullptr),
     ptrsAligned(nullptr),
     nElementsTotal(nElements_in), nAvailable(nElements_in),
+    historic_min_available(nElements_in),
     initialized(false),
     sizeSharedT(0),
     alignSharedT(0), 
@@ -179,11 +182,13 @@ class AllocatorState
 
     if (nAvailable > 0)
     {
-      return ptrsAligned[--nAvailable];
+      --nAvailable;
+      historic_min_available = std::min(historic_min_available, nAvailable); // record this point if its a new low in our history
+      return ptrsAligned[nAvailable];
     }
     else
     {
-      std::cout << "ALLOCATORSTATE - RAN OUT OF ELEMENTS TO LOAN. THE POOL IS TOO SMALL.\n";
+      // std::cout << "ALLOCATORSTATE - RAN OUT OF ELEMENTS TO LOAN. THE POOL IS TOO SMALL.\n";
       throw std::bad_alloc(); // this MUST happen
       // return nullptr;
     }
@@ -240,12 +245,18 @@ class AllocatorState
     return sizeSharedT;
   }
 
+  size_t Capacity()
+  {
+    return nElementsTotal;
+  }
+
   // get number of currently loaned out elements and number of available elements
-  void Statistics(size_t &nOutstanding_out, size_t &nAvailable_out)
+  void Statistics(size_t &nOutstanding_out, size_t &nAvailable_out, size_t &historic_min_available_out)
   {
     GuardT guard(mutex);
     nAvailable_out = nAvailable;
     nOutstanding_out = nElementsTotal - nAvailable;
+    historic_min_available_out = historic_min_available;
   }
 
   // given a pointer to SOMEWHERE in a block of memory, figure out which block it belongs to and return that index
@@ -282,7 +293,7 @@ class AllocatorState
 // getting the size and alignment of /exactly/ what we we need an array of, and any future class member additions will automatically
 // be included in the size/alignment detection (future proof)
 //
-template <class T, template<typename> class AllocatorT = std::allocator>
+template <class T, bool verbose = false, template<typename> class AllocatorT = std::allocator>
 class SharedPointerAllocator
 {
 
@@ -294,6 +305,7 @@ public:
   typedef T& reference;
   typedef const T& const_reference;
   typedef T value_type;
+  typedef std::shared_ptr<T>  sPtrT;
   
   typedef AllocatorState<AllocatorT> StateT; //convenience
 
@@ -308,6 +320,9 @@ public:
   SharedPointerAllocator(const AllocatorT<U> &allocator, Args&&... args)
     : state(std::allocate_shared<StateT>(AllocatorT<StateT>(allocator), 1, allocator))
   {
+    
+    static_assert(std::is_default_constructible<U>::value, "ERROR IPC::SharedPointerAllocator REQUIRES TYPES TO BE DEFAULT CONSTRUCTIBLE DUE TO THE WAY IT DETERMINES SIZE AND ALIGNMENT INFO FOR THE SHARED POINTER CONTROL BLOCK");
+
     if (!state)
     {
       // throw std::bad_alloc();    
@@ -317,9 +332,12 @@ public:
 
   public:
 
+  // default constructor just in case
+  SharedPointerAllocator() {}
+
   // any "copy" of this SharedPointerAllocator is a shallow copy of the shared state
-  template <class U, template<typename> class AllocatorU> 
-  SharedPointerAllocator(SharedPointerAllocator<U, AllocatorU> const& other) noexcept 
+  template <class U, template<typename> class AllocatorU, bool VerboseU> 
+  SharedPointerAllocator(SharedPointerAllocator<U, VerboseU, AllocatorU> const& other) noexcept 
   : state(other.state)
   {
     if (nullptr == state)
@@ -360,7 +378,7 @@ public:
     // - The control block is platform / compiler dependent
     // - The compiler is free to rearange member variables in memory as it sees fit 
     // - The size and alignment of the {control_block and T} struct may be different than either individal size/alignment
-    SharedPointerAllocator<T, AllocatorT> oneOffAllocator(allocator, std::forward<Args>(args)...);
+    SharedPointerAllocator<T, verbose, AllocatorT> oneOffAllocator(allocator, std::forward<Args>(args)...);
     std::allocate_shared<T>(oneOffAllocator, std::forward<Args>(args)...); // throw away object. TODO what if this errors out?
 
     // std::cout << "control block size and alignment detected\n";
@@ -372,10 +390,18 @@ public:
     state->Allocate(sizeSharedT, alignSharedT);
 
     if (state->Initialized())
-      std::printf("Constructing Allocator<T> with sizeof(T)=%zu but an extra %zu bytes are needed for the shared_ptr's control block. Total size = %zu, total alignment = %zu\n", sizeof(T), sizeSharedT - sizeof(T), sizeSharedT, alignSharedT);
+    {
+      if (verbose)
+      {
+        std::printf("Constructing Allocator<T> with sizeof(T)=%zu but an extra %zu bytes are needed for the shared_ptr's control block. Total size = %zu, total alignment = %zu\n", sizeof(T), sizeSharedT - sizeof(T), sizeSharedT, alignSharedT);
+      }
+    }
     else
     {
-      std::printf("SharedPointerAllocator - SOMETHING WEIRD HAS HAPPENED. THE POOL STATE COULD NOT INITIALIZE\n");
+      if (verbose)
+      {
+        std::printf("SharedPointerAllocator - SOMETHING WEIRD HAS HAPPENED. THE POOL STATE COULD NOT INITIALIZE\n");
+      }
       state = nullptr;
     }
   }
@@ -383,7 +409,7 @@ public:
   // rebind function. extremely important. and im not even gonna explain it :P
   template<class U>
   struct rebind {
-    typedef SharedPointerAllocator<U, AllocatorT> other;
+    typedef SharedPointerAllocator<U, verbose, AllocatorT> other;
   };
 
   // allocate pointer to element of mempool
@@ -412,20 +438,26 @@ public:
   }
 
   // pass through to get number of outstandini and available elements in the pool
-  void statistics(size_t &nOutstanding, size_t &nAvailable)
+  void statistics(size_t &nOutstanding, size_t &nAvailable, size_t &historic_min_available)
   {
     if (state)
-      state->Statistics(nOutstanding, nAvailable);
+      state->Statistics(nOutstanding, nAvailable, historic_min_available);
     else
     {
       nOutstanding = 0;
       nAvailable = 0;
+      historic_min_available = 0;
     }
   }
 
   size_t element_size()
   {
-    return state ? state->ElementSize() : 0;
+    return state ? state->Capacity() : 0;
+  }
+
+  size_t capacity()
+  {
+    return state ? state->Capacity() : 0;
   }
 
   template <typename ...Args>
@@ -448,15 +480,15 @@ public:
 };
 
 // obligatory operators
-template <class T, class U, template<typename> class AllocatorT, template<typename> class AllocatorU>
-bool operator==(SharedPointerAllocator<T, AllocatorT> const& x, SharedPointerAllocator<U, AllocatorU> const& y) noexcept
+template <class T, class U, template<typename> class AllocatorT, template<typename> class AllocatorU, bool VerboseT, bool VerboseU>
+bool operator==(SharedPointerAllocator<T, VerboseT, AllocatorT> const& x, SharedPointerAllocator<U, VerboseU, AllocatorU> const& y) noexcept
 {
     return x.state.get() == y.state.get();
 }
 
 // obligatory operators
-template <class T, class U, template<typename> class AllocatorT, template<typename> class AllocatorU>
-bool operator!=(SharedPointerAllocator<T, AllocatorT> const& x, SharedPointerAllocator<U, AllocatorU> const& y) noexcept
+template <class T, class U, template<typename> class AllocatorT, template<typename> class AllocatorU, bool VerboseT, bool VerboseU>
+bool operator!=(SharedPointerAllocator<T, VerboseT, AllocatorT> const& x, SharedPointerAllocator<U, VerboseU, AllocatorU> const& y) noexcept
 {
     return !(x == y);
 }
@@ -473,17 +505,20 @@ bool operator!=(SharedPointerAllocator<T, AllocatorT> const& x, SharedPointerAll
 // shared_ptr, and that memory cannot go out of scope until the SharedPointerAllocator<T*> 
 // goes out of scope
 //
-template <class T, template<typename> class AllocatorT = std::allocator>
+template <class T, bool verbose = false, template<typename> class AllocatorT = std::allocator>
 class SharedPointerArrayAllocator// : public SharedPointerAllocator<T*, AllocatorT>
 {
   public:
 
   typedef RawMemory<AllocatorT> RawMemoryT; 
 
-  SharedPointerAllocator<T*, AllocatorT> sharedPointerAllocator; // mempool of pointers
+  SharedPointerAllocator<T*, verbose, AllocatorT> sharedPointerAllocator; // mempool of pointers
   std::shared_ptr<RawMemoryT> rawObjects; // memory block of all arrays. scope is kept alive by destructor lambdas
   size_t count; // array size per pool element
   uint8_t* rawAligned;
+
+  // default constructor just in case
+  SharedPointerArrayAllocator() : sharedPointerAllocator(), rawObjects(), count(0), rawAligned(nullptr) {}
 
   // simple constructor 
   template <typename U=T>
@@ -559,9 +594,9 @@ class SharedPointerArrayAllocator// : public SharedPointerAllocator<T*, Allocato
   }
 
   // pass through to get number of outstanding and available elements in the pool
-  void Statistics(size_t &nOutstanding, size_t &nAvailable)
+  void Statistics(size_t &nOutstanding, size_t &nAvailable, size_t &historic_min_available)
   {
-    sharedPointerAllocator.statistics(nOutstanding, nAvailable);
+    sharedPointerAllocator.statistics(nOutstanding, nAvailable, historic_min_available);
   }
 
 };

@@ -35,7 +35,7 @@ void ChildProcess()
 
   // the type to route
   typedef MyClassIPC T;
-  typedef MemPoolGrower<MemPoolIPC<T>> PoolT;
+  typedef MemPoolGrowerIPC<MemPoolIPC<T>> PoolT;
 
   std::cout << "starting child process...\n";
 
@@ -80,7 +80,7 @@ int main(int argc, char *argv[])
     // ask OS for memory region and map it into address space
 
     typedef MyClassIPC T;
-    typedef MemPoolGrower<MemPoolIPC<T>> PoolT;
+    typedef MemPoolGrowerIPC<MemPoolIPC<T>> PoolT;
     size_t poolSize = 1;
     auto segmentPtr = utils_ipc::open_or_create_mapping("MySharedMemory", 4096 * 16);
     auto poolPtr = utils_ipc::find_or_create_shared_object<PoolT>(segmentPtr, "pool", segmentPtr->get_segment_manager(), poolSize, 3);

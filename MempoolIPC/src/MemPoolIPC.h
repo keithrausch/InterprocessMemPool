@@ -793,7 +793,7 @@ public:
 // TODO as is, this class is functional but could use just a little more love
 //
 template <typename T>
-struct MemPoolGrower
+struct MemPoolGrowerIPC
 {
   typedef typename T::sPtrT sPtrT;
   typedef ipc::mutex_family::mutex_type MutexT;
@@ -805,7 +805,7 @@ struct MemPoolGrower
   size_t nReconstructions;
 
   template <typename... Args>
-  MemPoolGrower(Args &&...args) : pool(std::forward<Args>(args)...), growthRate(2), nReconstructions(0)
+  MemPoolGrowerIPC(Args &&...args) : pool(std::forward<Args>(args)...), growthRate(2), nReconstructions(0)
   {
   }
 

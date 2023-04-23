@@ -53,7 +53,7 @@ class shared_state
 
   // This mutex synchronizes all access to all sessions
   typedef std::recursive_mutex MutexT;
-  MutexT mutex_;
+  mutable MutexT mutex_;
 
   // Keep a list of all the connected clients
   std::unordered_set<plain_websocket_session *> ws_sessions_;
@@ -116,7 +116,8 @@ public:
     }
 
   void check_doc_root();
-  size_t nSessions(size_t &insecure, size_t &secure);
+  size_t nSessions(size_t &insecure, size_t &secure) const;
+  size_t queue_sizes_summed() const;
 
   void upgrade(plain_websocket_session *ws_session);
   void downgrade(plain_websocket_session *ws_session);

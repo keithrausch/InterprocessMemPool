@@ -293,6 +293,7 @@ class http_session
     // The parser is stored in an optional container so we can
     // construct it from scratch it at the beginning of each new message.
     boost::optional<http::request_parser<http::string_body>> parser_;
+    std::atomic<size_t> queue_size_;
 
 protected:
     beast::flat_buffer buffer_;
@@ -322,6 +323,11 @@ public:
     void on_write2( beast::error_code ec, std::size_t bytes_transferred);
 
     void on_error(beast::error_code ec);
+
+    size_t queue_size() const
+    {
+        return queue_size_;
+    }
 };
 
 //------------------------------------------------------------------------------

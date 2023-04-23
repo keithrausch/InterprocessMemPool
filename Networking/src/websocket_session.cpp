@@ -125,12 +125,14 @@ template<class Derived>
 
                 // queue_.pop_back();
                 queue_.erase(queue_.begin() + i);
+                // queue size recorded further down
                 --i;
             }
         }
 
 
         queue_.emplace_back(msgPtr, msgSize, std::move(completionHandler), force_send);
+        queue_size_ = queue_.size();
 
         // Are we already writing?
         if (queue_.size() > 1)
@@ -166,6 +168,7 @@ template<class Derived>
 
         // Remove the string from the queue
         queue_.pop_front();
+        queue_size_ = queue_.size();
 
         // Handle the error, if any
         if (ec)
@@ -236,7 +239,7 @@ template<class Derived>
         rate_enforcer(state_in && state_in->rate_tracker ? state_in->rate_tracker->make_enforcer(state_in->rate_enforcer_args) : RateLimiting::RateEnforcer()),
         serverPort(0), 
         endpoint(endpoint_in),
-        upgraded(false)
+        upgraded(false), queue_size_(0)
     {
     }
 
@@ -251,7 +254,7 @@ template<class Derived>
                         serverAddress(serverAddress_in),
                         serverPort(serverPort_in),
                         endpoint(),
-                        upgraded(false)
+                        upgraded(false), queue_size_(0)
     {
     }
 
@@ -267,6 +270,7 @@ template<class Derived>
                 if (callback)
                     callback(boost::asio::error::operation_aborted, 0, endpoint);
                 queue_.pop_front();
+                queue_size_ = queue_.size();
             }
         }
 

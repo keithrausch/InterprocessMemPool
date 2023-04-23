@@ -28,6 +28,7 @@ namespace BeastNetworking
         endpoint(remote_endpoint_in)
         , queue_(*this)
         , buffer_(std::move(buffer))
+        , queue_size_(0)
     {
     }
 
@@ -163,12 +164,14 @@ namespace BeastNetworking
 
                 // queue_.pop_back();
                 send_queue_.erase(send_queue_.begin() + i);
+                // queue size recorded further down
                 --i;
             }
         }
 
 
         send_queue_.emplace_back(msgPtr, msgSize, std::move(completionHandler), force_send);
+        queue_size_ = send_queue_.size();
 
         // Are we already writing?
         if (send_queue_.size() > 1)
@@ -202,6 +205,7 @@ namespace BeastNetworking
 
         // Remove the string from the queue
         send_queue_.pop_front();
+        queue_size_ = send_queue_.size();
 
         // Handle the error, if any
         if (ec)

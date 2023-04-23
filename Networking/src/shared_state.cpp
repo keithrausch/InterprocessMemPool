@@ -56,12 +56,49 @@ void shared_state::check_doc_root()
   }
 }
 
-size_t shared_state::nSessions(size_t &insecure, size_t &secure)
+size_t shared_state::nSessions(size_t &insecure, size_t &secure) const
 {
   std::lock_guard<MutexT> lock(mutex_);
   insecure = ws_sessions_.size() + http_sessions_.size();
   secure = wss_sessions_.size() + https_sessions_.size();
   return insecure + secure;
+}
+
+size_t shared_state::queue_sizes_summed() const
+{
+  std::lock_guard<MutexT> lock(mutex_);
+
+  size_t queue_sizes_summed = 0;
+  
+  for (auto p : ws_sessions_)
+  {
+    auto strong = p->weak_from_this().lock();
+    if (strong)
+      queue_sizes_summed += strong->queue_size();
+  }
+
+  for (auto p : wss_sessions_)
+  {
+    auto strong = p->weak_from_this().lock();
+    if (strong)
+      queue_sizes_summed += strong->queue_size();
+  }
+
+  for (auto p : http_sessions_)
+  {
+    auto strong = p->weak_from_this().lock();
+    if (strong)
+      queue_sizes_summed += strong->queue_size();
+  }
+
+  for (auto p : https_sessions_)
+  {
+    auto strong = p->weak_from_this().lock();
+    if (strong)
+      queue_sizes_summed += strong->queue_size();
+  }
+  
+  return queue_sizes_summed;
 }
 
 void shared_state::upgrade(plain_websocket_session *ws_session)

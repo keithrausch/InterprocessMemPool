@@ -42,10 +42,10 @@ class websocket_session
     std::shared_ptr<shared_state> state_;
     std::deque<shared_state::SpanAndHandlerT> queue_; // no mutex needed, only ever modified inside handlers, which are in a strand
 
-
     std::shared_ptr<tcp::resolver> resolver_;
     RateLimiting::RateEnforcer rate_enforcer;
     std::atomic<bool> upgraded;
+    std::atomic<size_t> queue_size_;
 
 
 
@@ -146,6 +146,11 @@ public:
             timeout_params.keep_alive_pings = state_->timeouts.send_keep_alives; // ordinarily true
         }
         return timeout_params;
+    }
+
+    size_t queue_size() const
+    {
+        return queue_size_;
     }
 };
 

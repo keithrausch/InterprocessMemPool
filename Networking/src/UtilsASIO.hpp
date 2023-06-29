@@ -6,6 +6,7 @@
 #include <boost/enable_shared_from_this.hpp>
 #include <boost/beast.hpp>
 #include <boost/asio.hpp>
+#include <iostream>
 #include <string>
 #include <boost/asio/steady_timer.hpp>
 #include <boost/beast/core/bind_handler.hpp>

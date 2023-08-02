@@ -134,7 +134,8 @@ void handle_request( beast::string_view doc_root, http::request<Body, http::basi
 
     // Build the path to the requested file
     std::string path = path_cat(doc_root, req.target());
-    if(req.target().back() == '/')
+    path = path.substr(0, path.find('?')); // scrip off question mark and data after it
+    if(path.back() == '/')
         path.append("index.html");
 
     // Attempt to open the file

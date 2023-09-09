@@ -73,6 +73,11 @@ namespace utils_asio
       start_recieve();
     }
 
+    udp::socket & get_socket()
+    {
+      return socket;
+    }
+
   private:
     void on_error(boost::system::error_code ec)
     {

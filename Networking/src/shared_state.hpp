@@ -50,6 +50,7 @@ class ssl_http_session;
 class shared_state
 {
   std::string /*const*/ doc_root_;
+  uint64_t read_message_max_ = 0; // 0 uses recomended size, 
 
   // This mutex synchronizes all access to all sessions
   typedef std::recursive_mutex MutexT;
@@ -109,11 +110,10 @@ public:
   shared_state(const Callbacks &callbacks_in);
   shared_state(std::string doc_root, const Callbacks &callbacks_in);
 
-    std::string const&
-    doc_root() const noexcept
-    {
-        return doc_root_;
-    }
+  std::string const& doc_root() const noexcept;
+
+  uint64_t read_message_max();
+  void read_message_max(uint64_t size);
 
   void check_doc_root();
   size_t nSessions(size_t &insecure, size_t &secure) const;

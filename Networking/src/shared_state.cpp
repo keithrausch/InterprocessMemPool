@@ -41,6 +41,21 @@ shared_state::shared_state(std::string doc_root, const Callbacks &callbacks_in)
 {
 }
 
+std::string const& shared_state::doc_root() const noexcept
+{
+    return doc_root_;
+}
+
+uint64_t shared_state::read_message_max()
+{
+  return read_message_max_;
+}
+
+void shared_state::read_message_max(uint64_t size)
+{
+  read_message_max_ = size;
+}
+
 void shared_state::check_doc_root()
 {
   if (callbacks.callbackPrint)

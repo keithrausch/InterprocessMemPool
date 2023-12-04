@@ -220,6 +220,18 @@ template<class Derived>
     // https://stackoverflow.com/questions/7730260/binary-vs-string-transfer-over-a-stream
     // means bytes sent are bytes received, no UTF-8 text encode/decode
 
+    // set max message length
+    if (state_ && state_->read_message_max() > 0)
+    {
+        // NOTE: the following logic appeard to set the hint to 1536 despite what the documentation says
+        // boost.org/doc/libs/develop/libs/beast/doc/html/beast/ref/boost__beast__websocket__stream/read_size_hint/overload1.html
+        // uint64_t hint = (0 == ) ? derived().ws().read_size_hint() : state_->read_message_max();
+        // derived().ws().read_message_max(hint);
+
+
+        derived().ws().read_message_max(state_->read_message_max());
+    }
+
     // Add this session to the list of active sessions
     if (state_ && ! upgraded.exchange(true))
         state_->upgrade(&derived());

@@ -419,6 +419,7 @@ template class http_session<ssl_http_session>;
         , state_(state)
         , security_(security)
     {
+        buffer_.reserve(4096);
     }
 
     // Launch the detector

@@ -75,8 +75,8 @@ static std::string path_cat( beast::string_view base, beast::string_view path)
 // request. The type of the response object depends on the
 // contents of the request, so the interface requires the
 // caller to pass a generic lambda for receiving the response.
-template< class Body, class Allocator, class Send, class OnPostCallback>
-void handle_request( beast::string_view doc_root, http::request<Body, http::basic_fields<Allocator>>&& req, Send&& send, const OnPostCallback &on_post)
+template< class Body, class Allocator, class Send>
+void handle_request( beast::string_view doc_root, http::request<Body, http::basic_fields<Allocator>>&& req, Send&& send)
 {
     // Returns a bad request response
     auto const bad_request =
@@ -116,11 +116,6 @@ void handle_request( beast::string_view doc_root, http::request<Body, http::basi
         res.prepare_payload();
         return res;
     };
-
-    if (req.method() == http::verb::post && req.method() != http::verb::head)
-    {
-            on_post(req.body().data(), req.body().size());
-    }
 
     // Make sure we can handle the method
     if( req.method() != http::verb::get &&

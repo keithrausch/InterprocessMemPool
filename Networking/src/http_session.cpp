@@ -35,25 +35,89 @@ namespace BeastNetworking
     template<class Derived>
     void http_session<Derived>::do_read()
     {
-        // Construct a new parser for each message
-        parser_.emplace();
+        // shoving this branch here so that we can natively support raw tcp sockets instead of 
+        // forcing people to use http. sure i should have made another class, but i woke up at 3am
+        // and we need this
+        if (state_ && state_->server_is_tcp_instead_of_http())
+        {
+            size_t header_size = state_->nonhttp_header_size();
+            if (nonhttp_buffer_size_ < header_size)
+            {
+                nonhttp_buffer_.resize(header_size);
+                nonhttp_buffer_size_ = nonhttp_buffer_.size();
+            }
 
-        // Apply a reasonable limit to the allowed size
-        // of the body in bytes to prevent abuse.
-        parser_->body_limit(10000);
+            boost::asio::async_read(derived().socket(),
+                boost::asio::buffer(nonhttp_buffer_.data(), header_size),
+                beast::bind_front_handler(
+                &http_session::on_nonhttp_read_header, derived().shared_from_this()));
+        }
+        else
+        {
+            // Construct a new parser for each message
+            parser_.emplace();
 
-        // Set the timeout.
-        // beast::get_lowest_layer(derived().stream()).expires_after(std::chrono::seconds(30));
+            // Apply a reasonable limit to the allowed size
+            // of the body in bytes to prevent abuse.
+            parser_->body_limit(10000);
 
-        // Read a request using the parser-oriented interface
-        http::async_read(
-            derived().stream(),
-            buffer_,
-            *parser_,
-            beast::bind_front_handler(
-                &http_session::on_read,
-                derived().shared_from_this()));
+            // Set the timeout.
+            // beast::get_lowest_layer(derived().stream()).expires_after(std::chrono::seconds(30));
+
+            // Read a request using the parser-oriented interface
+            http::async_read(
+                derived().stream(),
+                buffer_,
+                *parser_,
+                beast::bind_front_handler(
+                    &http_session::on_read,
+                    derived().shared_from_this()));
+        }
     }
+
+  template<class Derived>
+  void http_session<Derived>::on_nonhttp_read_header(const boost::system::error_code& error, size_t /*bytes_transferred*/)
+  {
+    if (error)
+    {
+        on_error(error);
+        return;
+    }
+
+    if (state_ && state_->callbacks.callbackGetBodyLengthFromNonHTTPHeader)
+    {
+        size_t body_length = state_->callbacks.callbackGetBodyLengthFromNonHTTPHeader((void*)nonhttp_buffer_.data(), nonhttp_buffer_.size());
+        size_t header_length = state_->nonhttp_header_size();
+        size_t total_msg_length = body_length + header_length;
+
+        if (nonhttp_buffer_size_ < total_msg_length)
+        {
+            nonhttp_buffer_.resize(total_msg_length);
+            nonhttp_buffer_size_ = nonhttp_buffer_.size();
+        }
+
+        boost::asio::async_read(derived().socket(),
+            boost::asio::buffer(nonhttp_buffer_.data()+header_length, nonhttp_buffer_.size()-header_length),
+            beast::bind_front_handler(&http_session::on_nonhttp_read_body, derived().shared_from_this()));
+    }
+  }
+
+  template<class Derived>
+  void http_session<Derived>::on_nonhttp_read_body(const boost::system::error_code& error, size_t /*bytes_transferred*/)
+  {
+    if (error)
+    {
+        on_error(error);
+        return;
+    }
+    
+    if (state_)
+        state_->on_http_read(endpoint, nonhttp_buffer_.data(), nonhttp_buffer_.size());
+    do_read();
+  }
+
+
+
 
     template<class Derived>
     void http_session<Derived>::on_read(beast::error_code ec, std::size_t bytes_transferred)
@@ -419,7 +483,6 @@ template class http_session<ssl_http_session>;
         , state_(state)
         , security_(security)
     {
-        buffer_.reserve(4096);
     }
 
     // Launch the detector

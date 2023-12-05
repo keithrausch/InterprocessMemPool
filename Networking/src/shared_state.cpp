@@ -22,22 +22,33 @@ namespace BeastNetworking
 {
 
 shared_state::shared_state()
-    : doc_root_(), callbacks()
+    : doc_root_(), 
+    server_is_tcp_instead_of_http_(false), 
+    callbacks()
 {
 }
 
 shared_state::shared_state(std::string doc_root )
-    : doc_root_(std::move(doc_root)), callbacks()
+    : doc_root_(std::move(doc_root)), 
+    server_is_tcp_instead_of_http_(false), 
+    nonhttp_header_size_(0),
+    callbacks()
 {
 }
 
 shared_state::shared_state(const Callbacks &callbacks_in)
-    : doc_root_(), callbacks(callbacks_in)
+    : doc_root_(), 
+    server_is_tcp_instead_of_http_(false), 
+    nonhttp_header_size_(0), 
+    callbacks(callbacks_in)
 {
 }
 
-shared_state::shared_state(std::string doc_root, const Callbacks &callbacks_in)
-    : doc_root_(std::move(doc_root)), callbacks(callbacks_in)
+shared_state::shared_state(std::string doc_root, const Callbacks &callbacks_in, bool server_is_tcp_instead_of_http_in, size_t nonhttp_header_size_in)
+    : doc_root_(std::move(doc_root)), 
+    server_is_tcp_instead_of_http_(server_is_tcp_instead_of_http_in), 
+    nonhttp_header_size_(nonhttp_header_size_in), 
+    callbacks(callbacks_in)
 {
 }
 
@@ -114,6 +125,16 @@ size_t shared_state::queue_sizes_summed() const
   }
   
   return queue_sizes_summed;
+}
+
+bool shared_state::server_is_tcp_instead_of_http() const
+{
+  return server_is_tcp_instead_of_http_;
+}
+
+size_t shared_state::nonhttp_header_size() const
+{
+  return nonhttp_header_size_;
 }
 
 void shared_state::upgrade(plain_websocket_session *ws_session)

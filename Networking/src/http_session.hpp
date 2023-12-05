@@ -299,6 +299,8 @@ class http_session
 protected:
     beast::flat_buffer buffer_;
     std::shared_ptr<shared_state> state_;
+    std::vector<uint8_t> nonhttp_buffer_;
+    size_t nonhttp_buffer_size_{0}; // so we dont have to keep resizing our vector
 
 public:
     tcp::endpoint endpoint;
@@ -312,6 +314,9 @@ public:
         );
 
     void do_read();
+
+    void on_nonhttp_read_header(const boost::system::error_code& error, size_t bytes_transferred);
+    void on_nonhttp_read_body(const boost::system::error_code& error, size_t bytes_transferred);
 
     void on_read(beast::error_code ec, std::size_t bytes_transferred);
 

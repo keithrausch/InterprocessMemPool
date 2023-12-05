@@ -51,6 +51,8 @@ class shared_state
 {
   std::string /*const*/ doc_root_;
   uint64_t read_message_max_ = 0; // 0 uses recomended size, 
+  bool server_is_tcp_instead_of_http_;
+  size_t nonhttp_header_size_;
 
   // This mutex synchronizes all access to all sessions
   typedef std::recursive_mutex MutexT;
@@ -77,6 +79,7 @@ public:
     typedef std::function<void(const endpointT &endpoint)> CallbackSocketCloseT;
     typedef std::function<void(const endpointT &endpoint, const beast::error_code &ec)> CallbackErrorT;
     typedef std::function<void(const std::string &)> CallbackPrintT;
+    typedef std::function<size_t(const void *msgPtr, size_t msgSize)> CallbackGetBodyLengthFromNonHTTPHeaderT;
 
     CallbackReadT callbackWSRead;
     CallbackReadT callbackHTTPRead;
@@ -86,6 +89,7 @@ public:
     CallbackSocketCloseT callbackClose;
     CallbackErrorT callbackError;
     CallbackPrintT callbackPrint = [](const std::string &str){ std::cout << str << std::endl; };
+    CallbackGetBodyLengthFromNonHTTPHeaderT callbackGetBodyLengthFromNonHTTPHeader;
   };
 
   struct TimeoutSettings
@@ -108,7 +112,7 @@ public:
   shared_state();
   shared_state(std::string doc_root);
   shared_state(const Callbacks &callbacks_in);
-  shared_state(std::string doc_root, const Callbacks &callbacks_in);
+  shared_state(std::string doc_root, const Callbacks &callbacks_in, bool server_is_tcp_instead_of_http_in_in=false, size_t nonhttp_header_size=0);
 
   std::string const& doc_root() const noexcept;
 
@@ -118,6 +122,8 @@ public:
   void check_doc_root();
   size_t nSessions(size_t &insecure, size_t &secure) const;
   size_t queue_sizes_summed() const;
+  bool server_is_tcp_instead_of_http() const;
+  size_t nonhttp_header_size() const;
 
   void upgrade(plain_websocket_session *ws_session);
   void downgrade(plain_websocket_session *ws_session);

@@ -477,6 +477,15 @@ public:
       return nullptr;
     }
   }
+
+  // NOTE: since c++11, the destroy() allocator trait is optional and std::allocator_traits<T> falls back to calling p->~T() for you.
+  // wasn't that nice of the standards committe.
+  // see https://en.cppreference.com/w/cpp/memory/allocator_traits/destroy
+  // see https://en.cppreference.com/w/cpp/memory/allocator_traits
+
+  // NOTE:
+  // it might be cool to add construct() and destruct() functions to this mempool so users can implement their own
+  // utilities for object lifetime analysis, etc
 };
 
 // obligatory operators

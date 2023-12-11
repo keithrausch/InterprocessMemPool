@@ -40,17 +40,25 @@ void test_static_pool()
 
   std::cout << " ---------- make some shared pointers to MyClass objects ---------- \n";
 
-  auto pA1 = myAllocator.allocate_shared(1);
-  auto pA2 = pA1;
-  pA1 = nullptr;
+  {
+    auto pA1 = myAllocator.allocate_shared(1);
+    auto pA2 = pA1;
+    pA1 = nullptr;
 
-  auto pB1 = myAllocator.allocate_shared(2);
-  auto pB2 = pB1;
-  pB1 = nullptr;
+    auto pB1 = myAllocator.allocate_shared(2);
+    auto pB2 = pB1;
+    pB1 = nullptr;
 
-  auto pC1 = myAllocator.allocate_shared(3);
-  auto pC2 = pC1;
-  pC1 = nullptr;
+    auto pC1 = myAllocator.allocate_shared(3);
+    auto pC2 = pC1;
+    pC1 = nullptr;
+
+    std::cout << " ---------- returning elements back to their pools ---------- \n";
+    pA2 = nullptr;
+    pB2 = nullptr;
+    pC2 = nullptr;
+
+  }
 
   // print some statistics
   size_t nOutstanding;

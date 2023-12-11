@@ -128,18 +128,7 @@ namespace BeastNetworking
         if(ec == http::error::end_of_stream)
             return derived().do_eof();
 
-        // this is kind of a hack. the parser fails and throws an error for arbirary inputs
-        // but the data is still readable 
-        bool arbitrary_message = bool(ec) && buffer_.size() > 0;
-        if (arbitrary_message)
-        {
-            if (state_)
-                state_->on_http_read(endpoint, buffer_.data().data(), buffer_.size());
-            buffer_.consume(buffer_.size());
-            // std::cout << buffer_.data().
-        }
-
-        if(ec && !arbitrary_message)
+        if(ec)
             return fail(ec, "on_read");
 
         // See if it is a WebSocket Upgrade
@@ -157,9 +146,13 @@ namespace BeastNetworking
         }
 
         // Send the response
-        // handle_request(*doc_root_, parser_->release(), queue_);
-        if (! arbitrary_message)
-            handle_request(state_->doc_root(), parser_->release(), queue_);
+        auto on_post = [this](const void* ptr, size_t count)
+        {
+            if (state_)
+                state_->on_http_read(endpoint, ptr, count);
+        };
+
+        handle_request(state_->doc_root(), parser_->release(), queue_, on_post);
 
         // If we aren't at the queue limit, try to pipeline another request
         if(! queue_.is_full())

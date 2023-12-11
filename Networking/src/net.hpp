@@ -61,7 +61,7 @@ static void fail(beast::error_code ec, char const* what)
     if(ec == net::ssl::error::stream_truncated)
         return;
 
-    std::cerr << "BeastNetworking::" << what << ": " << ec.message() << "\n";
+    std::cerr << "BeastNetworking::" << what << ": " << ec.message() << " (value="+std::to_string(ec.value())+")" "\n";
 }
 
 

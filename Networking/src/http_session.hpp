@@ -321,7 +321,7 @@ public:
     void do_read();
 
     void on_nonhttp_read_header(const boost::system::error_code& error, size_t bytes_transferred);
-    void on_nonhttp_read_body(const boost::system::error_code& error, size_t bytes_transferred);
+    void on_nonhttp_read_body(size_t header_size, size_t body_size, const boost::system::error_code& error, size_t bytes_transferred);
 
     void on_read(beast::error_code ec, std::size_t bytes_transferred);
 

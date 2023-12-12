@@ -97,22 +97,28 @@ namespace BeastNetworking
         }
 
         boost::asio::async_read(derived().socket(),
-            boost::asio::buffer(nonhttp_buffer_.data()+header_length, nonhttp_buffer_.size()-header_length),
-            beast::bind_front_handler(&http_session::on_nonhttp_read_body, derived().shared_from_this()));
+            boost::asio::buffer(nonhttp_buffer_.data()+header_length, body_length),
+            beast::bind_front_handler(&http_session::on_nonhttp_read_body, derived().shared_from_this(), header_length, body_length));
     }
   }
 
   template<class Derived>
-  void http_session<Derived>::on_nonhttp_read_body(const boost::system::error_code& error, size_t /*bytes_transferred*/)
+  void http_session<Derived>::on_nonhttp_read_body(size_t header_size, size_t body_size, const boost::system::error_code& error, size_t bytes_transferred)
   {
-    if (error)
+    bool had_error = false;
+    size_t expected_byte_count = header_size+body_size;
+
+    had_error |= (body_size != bytes_transferred);
+    had_error |= (expected_byte_count > nonhttp_buffer_.size());
+
+    if (error || had_error)
     {
         on_error(error);
         return;
     }
     
     if (state_)
-        state_->on_http_read(endpoint, nonhttp_buffer_.data(), nonhttp_buffer_.size());
+        state_->on_http_read(endpoint, nonhttp_buffer_.data(), expected_byte_count);
     do_read();
   }
 

@@ -317,7 +317,7 @@ public:
   // this constructor is private and will only be called by the other constructor to create a temporary object
   // to figure out size/alignment
   template <typename U, typename ... Args>
-  SharedPointerAllocator(const AllocatorT<U> &allocator, Args&&... args)
+  SharedPointerAllocator(const AllocatorT<U> &allocator, [[maybe_unused]] Args&&... args)
     : state(std::allocate_shared<StateT>(AllocatorT<StateT>(allocator), 1, allocator))
   {
     
@@ -671,8 +671,8 @@ public:
 };
 
 template <class T, class U>
-bool operator==(Passthrough_Allocator<T> const& x, 
-                Passthrough_Allocator<U> const& y) noexcept
+bool operator==([[maybe_unused]] Passthrough_Allocator<T> const& x, 
+                [[maybe_unused]] Passthrough_Allocator<U> const& y) noexcept
 {
   return true;
 }

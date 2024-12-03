@@ -40,7 +40,7 @@
 #include "MultiClientReceiver.hpp"
 
 using namespace IPC; // dont crucify me
-using namespace BeastNetworking
+using namespace BeastNetworking;
 
 struct MyClassIPC
 {
@@ -85,8 +85,10 @@ void ProducerProcess()
   size_t nThreads = 1;
   utils_asio::GuardedContext guarded_context(nThreads);
 
+  boost::asio::ssl::context ssl_context{boost::asio::ssl::context::tlsv12};
+
   MultiClientSenderArgs args;
-  MultiClientSender sender(guarded_context.GetIOContext(), "myTopic", args, poolPtr->UniqueInstanceID());
+  MultiClientSender sender(guarded_context.GetIOContext(), ssl_context, "myTopic", args, poolPtr->UniqueInstanceID());
   sender.StartHeartbeat();
 
   std::this_thread::sleep_for(std::chrono::duration<double>(1.5));
@@ -105,7 +107,7 @@ void ProducerProcess()
     // just one of many ways to send data. 
     // the std::function method is the most generic, 
     // but this is a convenience function for most simple cases
-    sender.SendAsync((void*)(&*ptr), sizeof(*ptr), [ptr](boost::beast::error_code, size_t){}); 
+    sender.SendAsync((void*)(&*ptr), sizeof(*ptr), [ptr](boost::beast::error_code, size_t, boost::asio::ip::tcp::endpoint){}); 
   }
 
   std::this_thread::sleep_for(std::chrono::duration<double>(1.0)); // give the sender some time to finish up
@@ -142,7 +144,7 @@ void ConsumerProcess()
   //
   // setup all the callbacks for each topic
   //
-  MultiClientReceiver::TopicCallbacksT receivableTopics;
+  MultiClientReceiver::TopicStatesT receivableTopics;
 
   auto callbackRead = [poolPtr, routerPtr](const tcp::endpoint &endpoint, const void *msgPtr, size_t msgSize) {
     // std::string msg(static_cast<const char*>(msgPtr), msgSize);
@@ -158,7 +160,12 @@ void ConsumerProcess()
     std::printf("CONSUMER-READ - endpoint: %s\n", endpointString.c_str());
   };
 
-  receivableTopics["myTopic"].callbackRead = callbackRead;
+  std::shared_ptr<shared_state> state = std::make_shared<shared_state>();
+  state->callbacks.callbackWSRead = callbackRead;
+  state->callbacks.callbackAccept = [](const tcp::endpoint &endpoint) { std::cout << "session accepted:"<<endpoint<<"\n";};
+  state->callbacks.callbackUpgrade = [](const tcp::endpoint &endpoint) { std::cout << "session upgraded:"<<endpoint<<"\n";};
+
+  receivableTopics["myTopic"] = state;
 
   // if you had more topics, you would add them here
   // receivableTopics["someOtherTopic"] = ...
@@ -167,11 +174,13 @@ void ConsumerProcess()
   size_t nThreads = 2;
   utils_asio::GuardedContext guarded_context(nThreads - 1); // use the last thread to block
 
+  boost::asio::ssl::context ssl_context{boost::asio::ssl::context::tlsv12};
+
   MultiClientReceiverArgs args;
   args.permitLoopback = true;
   args.verbose = true;
-  MultiClientReceiver receiver(guarded_context.GetIOContext(), receivableTopics, args, poolPtr->UniqueInstanceID());
-  receiver.ListenForTopics();
+  std::shared_ptr<MultiClientReceiver> receiver = std::make_shared<MultiClientReceiver>(guarded_context.GetIOContext(), ssl_context, receivableTopics, args, poolPtr->UniqueInstanceID());
+  receiver->ListenForTopics();
 
   guarded_context.GetIOContext().run(); // block until the receiver timeout out
   

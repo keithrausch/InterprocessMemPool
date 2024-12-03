@@ -13,6 +13,8 @@
 // #include <iostream>
 
 #include "http_session.hpp"
+#include <chrono>
+#include <thread>
 
 
 namespace BeastNetworking
@@ -90,6 +92,9 @@ namespace BeastNetworking
         if(ec)
         {
             fail(ec, "on_accept");
+            
+            // insert sleep to keep the system from spamming the termianl/log files
+            std::this_thread::sleep_for(std::chrono::milliseconds(1000)); 
         }
         else
         {

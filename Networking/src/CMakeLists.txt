@@ -41,7 +41,7 @@ set(SRC_${LIB_NAME}
 #
 find_package(OpenSSL REQUIRED)
 
-find_package(Boost 1.70 REQUIRED COMPONENTS system filesystem)
+find_package(Boost 1.88 REQUIRED COMPONENTS system filesystem)
 include_directories(${Boost_INCLUDE_DIRS}) 
 
 if (MSVC)

@@ -200,7 +200,7 @@ namespace utils_asio
     Heartbeat(boost::asio::io_context &io_context_in, const MsgCreatorT &msgCreator_in, unsigned short portSender, const std::string &destination, unsigned short portReceiver, float period_seconds_in)
         : io_context(io_context_in),
           socket(io_context, udp::v4()),
-          receiver_endpoint(boost::asio::ip::address_v4::from_string(destination), portReceiver),
+          receiver_endpoint(boost::asio::ip::make_address_v4(destination), portReceiver),
           timer(io_context),
           period_seconds(period_seconds_in),
           msgCreator(msgCreator_in),

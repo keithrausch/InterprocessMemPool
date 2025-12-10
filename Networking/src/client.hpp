@@ -115,7 +115,7 @@ protected:
     if (ec)
       return handle_error(ec);
 
-    endpoint = results->endpoint();
+    endpoint = *results.begin();
     // Make the connection on the IP address we get from a lookup
 
     derived().lowest_layer().close(); // reuse error var

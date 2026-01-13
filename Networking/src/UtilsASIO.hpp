@@ -51,13 +51,16 @@ namespace utils_asio
                          size_t maxMessageLength,
                          double timeout_period_seconds_in,
                          const Callbacks &callbacks_in = Callbacks())
-        : socket(io_context, udp::endpoint(udp::v4(), portNumber)),
+        : socket(io_context),
           recvBuffer(maxMessageLength),
           timeout(io_context),
           timeout_period_seconds(timeout_period_seconds_in),
           callbacks(callbacks_in)
     {
+      udp::endpoint endpoint(udp::v4(), portNumber);
+      socket.open(endpoint.protocol());
       socket.set_option(boost::asio::ip::udp::socket::reuse_address(true));
+      socket.bind(endpoint);
       // DO NOT CALL start_recieve(); here. shared_from_this() needs a fully constructed
       // shared_ptr to work, and calling start_receive here enevitably calls shared_from_this()
       // before the constructor is finished
@@ -76,6 +79,11 @@ namespace utils_asio
     udp::socket & get_socket()
     {
       return socket;
+    }
+
+    boost::asio::steady_timer &get_timeout()
+    {
+      return timeout;
     }
 
   private:
@@ -131,7 +139,14 @@ namespace utils_asio
     void check_timeout(boost::system::error_code ec)
     {
       if (ec && ec != boost::asio::error::operation_aborted)
+      {
         on_error(ec);
+      }
+      if (ec)
+      {
+        return;
+      }
+        
 
       // Check whether the deadline has passed. We compare the deadline against
       // the current time since a new asynchronous operation may have moved the

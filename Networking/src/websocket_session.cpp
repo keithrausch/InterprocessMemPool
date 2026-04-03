@@ -70,6 +70,32 @@ template<class Derived>
         if (state_ && !upgraded.exchange(true))
             state_->upgrade(&derived());
 
+            // {
+            //     websocket::stream_base::timeout current_timeouts_0;
+            //     derived().ws().get_option(current_timeouts_0);
+            //     std::cout << "before Handshake timeout: " << current_timeouts_0.handshake_timeout.count() << "ns\n";
+            //     std::cout << "before Idle timeout: " << current_timeouts_0.idle_timeout.count() << "ns\n";
+            //     std::cout << "before Keep-alive pings enabled: " << std::boolalpha << current_timeouts_0.keep_alive_pings << "\n";
+            // }
+
+            {
+                // get default params and then tweak them
+                auto timeout_params = websocket::stream_base::timeout::suggested(beast::role_type::server);
+                auto ws_idle_timeout = state_->timeouts.ws_idle_timeout; // readability
+                timeout_params.idle_timeout = std::chrono::seconds(10);
+                timeout_params.keep_alive_pings = true;
+                derived().ws().set_option(timeout_params);
+            }
+
+            // {
+            //     websocket::stream_base::timeout current_timeouts_0;
+            //     derived().ws().get_option(current_timeouts_0);
+            //     std::cout << "after Handshake timeout: " << current_timeouts_0.handshake_timeout.count() << "ns\n";
+            //     std::cout << "after Idle timeout: " << current_timeouts_0.idle_timeout.count() << "ns\n";
+            //     std::cout << "after Keep-alive pings enabled: " << std::boolalpha << current_timeouts_0.keep_alive_pings << "\n";
+            // }
+
+
         // Read a message
         derived().ws().async_read(
             buffer_,

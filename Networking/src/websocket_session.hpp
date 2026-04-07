@@ -127,8 +127,12 @@ public:
 
         if (state_)
         {
+            auto ws_handshake_timeout = state_->timeouts.ws_handshake_timeout; // readability
+            timeout_params.handshake_timeout = ws_handshake_timeout > 0 ? std::chrono::seconds(ws_handshake_timeout) : websocket::stream_base::none();
+
             auto ws_idle_timeout = state_->timeouts.ws_idle_timeout; // readability
             timeout_params.idle_timeout = ws_idle_timeout > 0 ? std::chrono::seconds(ws_idle_timeout) : websocket::stream_base::none();
+
             timeout_params.keep_alive_pings = state_->timeouts.send_keep_alives; // ordinarily false
         }
         return timeout_params;
@@ -141,10 +145,12 @@ public:
 
         if (state_)
         {
-            // std::cout << "state_->timeouts.ws_idle_timeout: " + std::to_string(state_->timeouts.ws_idle_timeout) + "\n";
-            // std::cout << "state_->timeouts.send_keep_alives: " + std::to_string(state_->timeouts.send_keep_alives) + "\n";
+            auto ws_handshake_timeout = state_->timeouts.ws_handshake_timeout; // readability
+            timeout_params.handshake_timeout = ws_handshake_timeout > 0 ? std::chrono::seconds(ws_handshake_timeout) : websocket::stream_base::none();
+
             auto ws_idle_timeout = state_->timeouts.ws_idle_timeout; // readability
             timeout_params.idle_timeout = ws_idle_timeout > 0 ? std::chrono::seconds(ws_idle_timeout) : websocket::stream_base::none();
+
             timeout_params.keep_alive_pings = state_->timeouts.send_keep_alives; // ordinarily true
         }
         return timeout_params;

@@ -94,7 +94,8 @@ public:
 
   struct TimeoutSettings
   {
-    int64_t ws_idle_timeout = 300; // integer seconds
+    int64_t ws_handshake_timeout = 30; // integer seconds
+    int64_t ws_idle_timeout = 30; // integer seconds
     bool send_keep_alives = true; // set at intervals of half the idle time
   };
 
